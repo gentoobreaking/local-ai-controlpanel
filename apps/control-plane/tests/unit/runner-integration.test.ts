@@ -46,7 +46,7 @@ test("T021：有 registry 時 IMPLEMENTING → PiWorker stub → ARTIFACT_VALIDA
       id: "pi-local",
       runtime: "pi",
       capabilities: ["coding", "testing"],
-      models: ["qwen-9b"],
+      models: ["qwen2.5-coder:7b"],
       locality: "local",
       costClass: "free",
       supportsACP: true,

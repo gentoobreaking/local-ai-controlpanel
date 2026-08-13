@@ -47,7 +47,7 @@ export function createRunner(
   const router = workerRegistry ? new WorkerRouter(workerRegistry) : null;
   // Worker 初始化 context：llama.cpp baseUrl 由環境變數設定（§16 設定化）
   const llmBaseUrl = process.env.LLAMA_BASE_URL ?? "http://127.0.0.1:8080";
-  const llmModel = process.env.LLAMA_MODEL ?? "qwen-9b";
+  const llmModel = process.env.LLAMA_MODEL ?? "qwen2.5-coder:7b";
   const initializedWorkers = new Set<string>();
   const emit = (taskId: string, e: StageEvent) => bus.emit(taskId, e);
 
@@ -309,7 +309,7 @@ export function createRunner(
         taskId,
         task.attempt,
         ws?.request.executionPolicy.worker ?? "pi-local",
-        ws?.request.executionPolicy.model ?? "qwen-9b",
+        ws?.request.executionPolicy.model ?? "qwen2.5-coder:7b",
       );
       step(task, "ARTIFACT_VALIDATION");
     } else {
@@ -318,7 +318,7 @@ export function createRunner(
         taskId,
         task.attempt,
         ws?.request.executionPolicy.worker ?? "pi-local",
-        ws?.request.executionPolicy.model ?? "qwen-9b",
+        ws?.request.executionPolicy.model ?? "qwen2.5-coder:7b",
       );
       step(task, "REFLECTION");
       runReflection(task, result.output ?? result.summary);

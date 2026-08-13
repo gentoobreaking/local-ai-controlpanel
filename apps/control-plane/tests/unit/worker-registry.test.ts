@@ -22,7 +22,7 @@ const LOCAL_STRATEGY: ExecutionStrategy = {
   strategy: "local_only",
   tier: "local",
   worker: "pi-local",
-  model: "qwen-9b",
+  model: "qwen2.5-coder:7b",
   allowCloud: false,
   maxAttempts: 3,
 };
@@ -42,7 +42,7 @@ test("WorkerDescriptor v0.4 完整欄位（§17）", () => {
   const registry = createDefaultWorkerRegistry();
   const [d] = registry.list();
   assert.ok(d!.capabilities.includes("coding"));
-  assert.ok(d!.models.includes("qwen-9b"));
+  assert.ok(d!.models.includes("qwen2.5-coder:7b"));
   assert.equal(d!.supportsACP, true);
   assert.equal(d!.supportsMCP, true);
   assert.equal(typeof d!.id, "string");
@@ -57,7 +57,7 @@ test("register / get / list 基本操作", () => {
       id: "pi-local",
       runtime: "pi",
       capabilities: ["coding"],
-      models: ["qwen-9b"],
+      models: ["qwen2.5-coder:7b"],
       locality: "local",
       costClass: "free",
       supportsACP: true,
@@ -149,7 +149,7 @@ test("enabled=false 的 worker 不被 listEnabled 選中", () => {
     id,
     runtime: "pi",
     capabilities: [],
-    models: ["qwen-9b"],
+    models: ["qwen2.5-coder:7b"],
     locality: "local" as const,
     costClass: "free" as const,
     supportsACP: true,

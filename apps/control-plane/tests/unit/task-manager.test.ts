@@ -95,7 +95,7 @@ test("關聯查詢：evidenceCount / verificationSummary / recordAttempt", () =>
     durationMs: 1200,
   });
 
-  manager.recordAttempt(t.id, 1, "pi-local", "qwen-9b");
+  manager.recordAttempt(t.id, 1, "pi-local", "qwen2.5-coder:7b");
   const attempts = db.prepare("SELECT * FROM attempts").all();
   assert.equal(attempts.length, 1);
 });

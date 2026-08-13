@@ -7,7 +7,7 @@ execution:
   strategy: local_first
   local:
     worker: pi-local
-    model: qwen-9b
+    model: qwen2.5-coder:7b
     max_attempts: 3
   allow_cloud: false            # Phase 1–5 硬性禁止（§24）
 

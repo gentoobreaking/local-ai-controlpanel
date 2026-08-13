@@ -129,7 +129,7 @@ export class WorkerRouter {
 
 /**
  * 建立預設 registry：Phase 1–5 只註冊 pi-local（§17）。
- * qwen-9b、tier: local、enabled（對應 policies/default.yaml execution.local）。
+ * qwen2.5-coder:7b、tier: local、enabled（對應 policies/default.yaml execution.local）。
  */
 export function createDefaultWorkerRegistry(): WorkerRegistry {
   const registry = new WorkerRegistry();
@@ -140,7 +140,7 @@ export function createDefaultWorkerRegistry(): WorkerRegistry {
       id: "pi-local",
       runtime: "pi",
       capabilities: ["coding", "testing"],
-      models: ["qwen-9b"],
+      models: ["qwen2.5-coder:7b"],
       locality: "local",
       costClass: "free",
       supportsACP: true,

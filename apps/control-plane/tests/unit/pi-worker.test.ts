@@ -44,7 +44,7 @@ function makeRequest(overrides: Partial<WorkerRequest> = {}): WorkerRequest {
       strategy: "local_only",
       tier: "local",
       worker: "pi-local",
-      model: "qwen-9b",
+      model: "qwen2.5-coder:7b",
       allowCloud: false,
       maxAttempts: 3,
       allowedFiles: ["pkg/controller/deployment.go"],
@@ -58,7 +58,7 @@ function makeRequest(overrides: Partial<WorkerRequest> = {}): WorkerRequest {
 
 test("stub 模式：llama.cpp 不可達時走 stub 快速路徑（§16 備註）", async () => {
   const worker = new PiWorker({ allowStub: true });
-  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen-9b", workspaceRoot: "/tmp" });
+  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
   assert.equal(worker.mode, "stub");
 
   const res = await worker.execute(makeRequest());
@@ -71,7 +71,7 @@ test("stub 模式：llama.cpp 不可達時走 stub 快速路徑（§16 備註）
 
 test("§16 contract：evidence 以 evidence 欄位傳遞，Pi 無 web search 能力", async () => {
   const worker = new PiWorker({ allowStub: true });
-  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen-9b", workspaceRoot: "/tmp" });
+  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
 
   // 從 execute 的 output 驗證 contract 內容有被傳遞
   const res = await worker.execute(makeRequest());
@@ -86,7 +86,7 @@ test("§16 contract：evidence 以 evidence 欄位傳遞，Pi 無 web search 能
 
 test("stub 模式：plan 步驟數傳入 contract", async () => {
   const worker = new PiWorker({ allowStub: true });
-  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen-9b", workspaceRoot: "/tmp" });
+  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
   const res = await worker.execute(makeRequest({ plan: { id: "p", steps: [{ id: "a", description: "x" }, { id: "b", description: "y" }, { id: "c", description: "z" }] } }));
   assert.ok(res.summary.includes("3 步"), "summary 含 plan 步數");
   await worker.shutdown();
@@ -94,7 +94,7 @@ test("stub 模式：plan 步驟數傳入 contract", async () => {
 
 test("interrupt：中止進行中的 execute（§15）", async () => {
   const worker = new PiWorker({ allowStub: true });
-  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen-9b", workspaceRoot: "/tmp" });
+  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
 
   // stub 路徑有 50ms 延遲，interrupt 後應回傳中止結果
   const execPromise = worker.execute(makeRequest());
@@ -139,7 +139,7 @@ async function startHangingServer() {
 test("allowStub=false 且 endpoint 不可達時 initialize 拋錯", async () => {
   const worker = new PiWorker({ allowStub: false });
   await assert.rejects(
-    worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen-9b", workspaceRoot: "/tmp" }),
+    worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" }),
     LlamaConnectionError,
   );
 });
@@ -149,14 +149,14 @@ test("llama 模式：fake OpenAI-compatible endpoint 可呼叫（§16 設定化 
   const server = await startFakeLlama();
   try {
     const worker = new PiWorker({ allowStub: false });
-    await worker.initialize({ baseUrl: server.url, model: "qwen-9b", workspaceRoot: "/tmp" });
+    await worker.initialize({ baseUrl: server.url, model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
     assert.equal(worker.mode, "llama");
     const res = await worker.execute(makeRequest());
     assert.equal(res.ok, true);
     assert.ok(res.output!.includes("DONE"), "模型輸出含 DONE");
     const body = server.lastBody();
     assert.ok(body, "lastBody 不為 null");
-    assert.ok(body.model === "qwen-9b", "request 帶正確 model 名稱");
+    assert.ok(body.model === "qwen2.5-coder:7b", "request 帶正確 model 名稱");
     const userMsg = body.messages.find((m: { role: string }) => m.role === "user")!;
     assert.ok(userMsg.content.includes("deployment scaling"), "user prompt 含 objective");
     assert.ok(userMsg.content.includes("kubernetes-official"), "user prompt 含 evidence（§16 contract）");
@@ -170,7 +170,7 @@ test("llama 模式：模型回 FAILED 時分類失敗", async () => {
   const server = await startFakeLlama({ reply: "FAILED: cannot find file deployment.go\n" });
   try {
     const worker = new PiWorker({ allowStub: false });
-    await worker.initialize({ baseUrl: server.url, model: "qwen-9b", workspaceRoot: "/tmp" });
+    await worker.initialize({ baseUrl: server.url, model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
     const res = await worker.execute(makeRequest());
     assert.equal(res.ok, false);
     assert.equal(res.errorClassification, "coding_error");
