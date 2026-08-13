@@ -50,7 +50,7 @@ pnpm tauri build    # 打包 .app/.dmg
 | T005 | Repo scaffold（monorepo + Fastify 骨架） | ✅ done |
 | T006 | SQLite schema + Task model + Task Manager | ✅ done |
 | T007 | State Machine（§9） | ✅ done |
-| T008 | Control Plane API（REST + SSE，§45.5） | ⏳ |
+| T008 | Control Plane API（REST + SSE，§45.5） | ✅ done |
 | T009+ | CLI / Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
