@@ -55,7 +55,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T009 | CLI（acp 指令集，§29） | ✅ done |
 | T010 | Policy Engine（YAML + zod + Knowledge Policy，§10） | ✅ done |
 | T011 | Artifact Controller（validate/apply/rollback，§20） | ✅ done |
-| T012+ | Sandbox / Research / Benchmark… | ⏳ pending |
+| T012 | Verification Engine + Sandbox Interface/Registry（§21） | ✅ done |
+| T013+ | Sandbox 實作 / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
