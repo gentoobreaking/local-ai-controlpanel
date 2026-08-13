@@ -57,7 +57,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T011 | Artifact Controller（validate/apply/rollback，§20） | ✅ done |
 | T012 | Verification Engine + Sandbox Interface/Registry（§21） | ✅ done |
 | T013 | seatbelt（sandbox-exec）adapter + default-deny profile（§28.1） | ✅ done |
-| T014+ | bwrap / shuru / Research / Benchmark… | ⏳ pending |
+| T014 | bwrap（bubblewrap）adapter + §21.2 template | ✅ done |
+| T015+ | shuru / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
