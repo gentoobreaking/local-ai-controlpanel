@@ -49,7 +49,7 @@ pnpm tauri build    # 打包 .app/.dmg
 | T001–T004 | Tauri Desktop UI（UI-1~UI-4：scaffold/視覺/SSE/輸入+面板） | ✅ done |
 | T005 | Repo scaffold（monorepo + Fastify 骨架） | ✅ done |
 | T006 | SQLite schema + Task model + Task Manager | ✅ done |
-| T007 | State Machine（§9） | ⏳ |
+| T007 | State Machine（§9） | ✅ done |
 | T008 | Control Plane API（REST + SSE，§45.5） | ⏳ |
 | T009+ | CLI / Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
 
