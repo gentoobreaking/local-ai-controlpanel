@@ -35,6 +35,7 @@ pnpm install
 pnpm cp:dev         # Control Plane（Fastify → 127.0.0.1:3001）
 pnpm cp:build       # Control Plane build（tsc）
 pnpm cp:test        # Control Plane unit tests（node:test + tsx）
+pnpm acp -- <cmd>   # acp CLI（§29；另可用 pnpm acp task run "..." 等）
 pnpm typecheck      # 全 repo strict typecheck
 
 pnpm dev            # 前端僅 Vite http://localhost:1420
@@ -51,7 +52,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T006 | SQLite schema + Task model + Task Manager | ✅ done |
 | T007 | State Machine（§9） | ✅ done |
 | T008 | Control Plane API（REST + SSE，§45.5） | ✅ done |
-| T009+ | CLI / Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
+| T009 | CLI（acp 指令集，§29） | ✅ done |
+| T010+ | Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
