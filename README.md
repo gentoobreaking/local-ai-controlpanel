@@ -53,7 +53,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T007 | State Machine（§9） | ✅ done |
 | T008 | Control Plane API（REST + SSE，§45.5） | ✅ done |
 | T009 | CLI（acp 指令集，§29） | ✅ done |
-| T010+ | Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
+| T010 | Policy Engine（YAML + zod + Knowledge Policy，§10） | ✅ done |
+| T011+ | Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
