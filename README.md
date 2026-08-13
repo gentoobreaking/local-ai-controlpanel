@@ -1,55 +1,61 @@
-# Agent Control Plane — Desktop UI（Tauri v2）
+# Agent Control Plane
 
-Layer 7 使用者介面（spec §45）。opencode 風格的終端介面：暗色、等寬字體、鍵盤優先、SSE 串流顯示 task 執行。
+Research-driven, Evidence-gated, Policy-controlled Coding Agent Control Plane（spec v0.5）。
 
-> **程式碼路徑**：`~/Projects/local-ai-controlpanel`
-> **開發規格路徑**：`~/tasks/local-ai-controlpanel`（`agent-control-plane-spec-v0.5.md` 為唯一權威版本）
+> **程式碼路徑**：`~/Projects/local-ai-controlpanel`（monorepo）
+> **開發規格路徑**：`~/tasks/local-ai-controlpanel`（`agent-control-plane-spec-v0.5.md` 為唯一權威版本；任務書在 `tasks/`）
 
 ## 結構
 
 ```text
 local-ai-controlpanel/
-├── src/                    # React + TypeScript 前端（Vite）
+├── src/                    # Tauri Desktop UI（Layer 7，§45）React + TS 前端
 │   ├── App.tsx             # 佈局：TopBar / TaskList / TaskStream / InputBar / Palette
 │   ├── api/client.ts       # Control Plane REST + SSE client（§45.5 契約）
-│   ├── components/
-│   └── styles/terminal.css # terminal 暗色主題（§45.4 視覺規範）
-└── src-tauri/              # Rust 薄殼（tauri.conf.json / capabilities / commands）
-```
-
-## 前置需求（尚未安裝的）
-
-```bash
-# 1. Rust toolchain（目前未安裝，需 rustup 或 brew install rust）
-rustup-init   # 或 brew install rust
-
-# 2. pnpm
-corepack enable  # node 22 內建 corepack
-
-# 3. 產生圖示（tauri.conf.json 引用）
-pnpm tauri icon <任意 1024x1024 png>
+│   └── components/ · styles/
+├── src-tauri/              # Rust 薄殼（tauri.conf.json / capabilities / commands）
+├── apps/
+│   ├── control-plane/      # Layer 6 Control Plane（Fastify + Zod，§45.5 API）
+│   └── cli/                # acp CLI（§29）
+├── packages/               # 依 §7 佔位（core/task/policy/state/...，後續逐步實作）
+├── policies/               # default/coding/research/security/escalation/sandbox/kubernetes
+├── schemas/                # task/evidence/policy/worker JSON Schema
+├── sandbox-profiles/       # verification-default.sb（§28.1 default-deny）
+├── tests/                  # unit / integration / e2e
+├── benchmark/              # tasks/datasets/runners/metrics/reports/baselines
+├── docs/ · docker/
+└── pnpm-workspace.yaml
 ```
 
 ## 開發
 
 ```bash
 pnpm install
-pnpm tauri dev        # 啟動 Rust + WebView（需 Control Plane 在 127.0.0.1:3001）
+
+pnpm cp:dev         # Control Plane（Fastify → 127.0.0.1:3001）
+pnpm cp:build       # Control Plane build（tsc）
+pnpm cp:test        # Control Plane unit tests（node:test + tsx）
+pnpm typecheck      # 全 repo strict typecheck
+
+pnpm dev            # 前端僅 Vite http://localhost:1420
+pnpm tauri dev      # Desktop UI（需 Control Plane 於 127.0.0.1:3001）
+pnpm tauri build    # 打包 .app/.dmg
 ```
 
-僅前端（無 Rust）：
+## 任務進度
 
-```bash
-pnpm dev              # http://localhost:1420
-```
+| 任務 | 內容 | 狀態 |
+|---|---|---|
+| T001–T004 | Tauri Desktop UI（UI-1~UI-4：scaffold/視覺/SSE/輸入+面板） | ✅ done |
+| T005 | Repo scaffold（monorepo + Fastify 骨架） | ✅ done |
+| T006 | SQLite schema + Task model + Task Manager | ⏳ |
+| T007 | State Machine（§9） | ⏳ |
+| T008 | Control Plane API（REST + SSE，§45.5） | ⏳ |
+| T009+ | CLI / Policy / Artifact / Sandbox / Research / Benchmark… | ⏳ pending |
 
-## 連線 Control Plane
-
-- 預設 `http://127.0.0.1:3001`（`VITE_CP_URL` 可覆寫）
-- 需要的 endpoint（spec §45.5）：`/api/v1/tasks`、`/api/v1/tasks/:id/events`（SSE）、`/api/v1/sandbox`、`/api/v1/tasks/:id/cancel`
+詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
 ## 安全
 
-- WebView capabilities 只允許：core:default、`shell:allow-open`（僅 http/https external link）
-- 無 filesystem / shell / secrets 權限（spec §45.3 Rule 4 延伸）
-- CSP 只允許連線 `http://127.0.0.1:*`
+- Control Plane 只 bind `127.0.0.1`（§45.3）；Phase 1–5 `allow_cloud: false`（§24）
+- WebView capabilities：`core:default` + `opener:allow-open-url`（僅 http/https）；無 filesystem/shell/secrets（§45.3 Rule 4 延伸）
