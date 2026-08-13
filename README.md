@@ -58,7 +58,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T012 | Verification Engine + Sandbox Interface/Registry（§21） | ✅ done |
 | T013 | seatbelt（sandbox-exec）adapter + default-deny profile（§28.1） | ✅ done |
 | T014 | bwrap（bubblewrap）adapter + §21.2 template | ✅ done |
-| T015+ | shuru / Research / Benchmark… | ⏳ pending |
+| T015 | shuru（MicroVM）adapter + selectSandbox step-3 fallback | ✅ done |
+| T016+ | verify 切換檢查（acp verify 真實引擎 + workspace）… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
@@ -66,6 +67,7 @@ pnpm tauri build    # 打包 .app/.dmg
 
 - Control Plane 只 bind `127.0.0.1`（§45.3）；Phase 1–5 `allow_cloud: false`（§24）
 - WebView capabilities：`core:default` + `opener:allow-open-url`（僅 http/https）；無 filesystem/shell/secrets（§45.3 Rule 4 延伸）
+- Sandbox 模式：bwrap（Linux）/seatbelt（macOS）為預設（§21.2）；shuru 為 `security.risk == high` 的操作啟用（§44 Q6）；docker 為 fallback。
 
 規格書：`~/tasks/local-ai-controlpanel/agent-control-plane-spec-v0.5.md`
 
