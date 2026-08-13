@@ -35,6 +35,7 @@ export async function createTaskRouter(
     const body = CreateTaskSchema.parse(req.body);
     const task = taskManager.create({
       userRequest: body.userRequest,
+      workspace: body.workspace,
       sandboxMode: body.sandboxMode,
     });
     runner.start(task.id);

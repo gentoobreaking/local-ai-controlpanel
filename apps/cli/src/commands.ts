@@ -34,12 +34,15 @@ function help(args: string[]): CommandResult {
 async function taskRun(client: ApiClient, args: string[]): Promise<CommandResult> {
   const positional: string[] = [];
   let sandbox: string | undefined;
+  let workspace: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--sandbox") {
       sandbox = args[++i];
+    } else if (a === "--workspace") {
+      workspace = args[++i];
     } else if (a === "--help" || a === "-h") {
-      return { code: 0, lines: ["用法: acp task run \"<request>\" [--sandbox <mode>]"] };
+      return { code: 0, lines: ["用法: acp task run \"<request>\" [--sandbox <mode>] [--workspace <path>"] };
     } else if (a !== undefined) {
       positional.push(a);
     }
@@ -49,6 +52,7 @@ async function taskRun(client: ApiClient, args: string[]): Promise<CommandResult
   }
   const res = await client.createTask({
     userRequest: positional.join(" "),
+    workspace,
     sandboxMode: sandbox,
   });
   return {
@@ -56,8 +60,10 @@ async function taskRun(client: ApiClient, args: string[]): Promise<CommandResult
     lines: [
       `任務已建立: ${res.id}`,
       `狀態: ${res.status}`,
+      `workspace: ${res.workspace ?? "（未指定）"}`,
       `sandbox: ${res.sandboxMode ?? "（policy 決定）"}`,
       `進度: acp task status ${res.id}`,
+      `驗證: acp verify ${res.id}`,
     ],
   };
 }
@@ -164,13 +170,17 @@ async function verify(client: ApiClient, args: string[]): Promise<CommandResult>
     else positional.push(args[i]!);
   }
   if (positional.length !== 1) {
-    return { code: 2, lines: ["用法: acp verify <id> [--sandbox <mode>]"] };
+    return { code: 2, lines: ["用法: acp verify <id> [--sandbox <mode>"] };
   }
-  const res = await client.verifyTask(positional[0]!);
-  return {
-    code: res.error ? 1 : 0,
-    lines: [`任務 ${String(res.taskId)}: ${String(res.error ?? res.status ?? "ok")}`],
-  };
+  const res = await client.verifyTask(positional[0]!, { sandboxMode: sandbox });
+  const taskId = String(res.taskId ?? positional[0]);
+  if (res.error) return { code: 1, lines: [`任務 ${taskId}: ${String(res.error)} — ${String(res.message ?? "")}`] };
+  const results = (res.results ?? []) as { verifier: string; status: string; output?: string }[];
+  const lines = [`任務 ${taskId} ${String(res.status ?? "verified")} — sandbox=${String(res.sandbox ?? "auto")}：`];
+  for (const r of results) {
+    lines.push(`  - ${r.verifier}: ${r.status}`);
+  }
+  return { code: 0, lines };
 }
 
 async function logs(client: ApiClient, id: string): Promise<CommandResult> {

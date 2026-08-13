@@ -83,8 +83,8 @@ export class ApiClient {
     return this.request<Record<string, unknown>>("GET", "/api/v1/policy/validate");
   }
 
-  verifyTask(id: string) {
-    return this.request<Record<string, unknown>>("POST", `/api/v1/tasks/${id}/verify`);
+  verifyTask(id: string, opts: { sandboxMode?: string } = {}) {
+    return this.request<Record<string, unknown>>("POST", `/api/v1/tasks/${id}/verify`, opts);
   }
 
   getLogs(id: string) {

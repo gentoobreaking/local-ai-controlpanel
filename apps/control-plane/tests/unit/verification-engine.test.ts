@@ -145,7 +145,7 @@ test("detect：ts fixture → git_diff / unit_test / build / lint（typecheck �
 
 test("run：所有適用 verifier 一律透過 sandbox.run（Rule 8，不直接 exec）", async () => {
   const ctx = makeCtx(workspaces[0]!);
-  const results = await engine.verify(ctx, DEFAULT_VERIFIERS);
+  const { results } = await engine.verify(ctx, DEFAULT_VERIFIERS);
   assert.ok(results.length >= 4, `應至少 4 個 verifier，實際 ${results.length}`);
   for (const r of results) {
     assert.equal(r.status, "PASS");
@@ -168,7 +168,7 @@ test("exit code 非 0 → FAIL（sandbox 真實執行）", async () => {
     policy: {},
     record() {},
   });
-  const results = await e2.verify(makeCtx(workspaces[1]!, { task: { risk: "low", sandboxMode: "docker" } }), DEFAULT_VERIFIERS);
+  const { results } = await e2.verify(makeCtx(workspaces[1]!, { task: { risk: "low", sandboxMode: "docker" } }), DEFAULT_VERIFIERS);
   const unit = results.find((r) => r.verifier === "unit_test");
   assert.ok(unit, "unit_test 應執行");
   assert.equal(unit!.status, "FAIL");

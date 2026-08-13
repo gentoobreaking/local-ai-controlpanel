@@ -25,7 +25,8 @@ export class NotImplementedSandbox implements Sandbox {
   ) {}
 
   async isAvailable(): Promise<boolean> {
-    return hasBinary(this.bin);
+    // NotImplemented adapter 無論 binary 是否存在皆不可用（run 會擲錯）
+    return false;
   }
 
   async run(context: SandboxRunContext): Promise<SandboxRunResult> {

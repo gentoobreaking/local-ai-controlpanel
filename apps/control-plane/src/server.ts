@@ -91,7 +91,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createEventRouter, { deps: { bus, runner } });
   await app.register(createSandboxRouter, { deps: { registry } });
   await app.register(createStrategyRouter, { deps: { taskManager, policyEngine } });
-  await app.register(createCliRouter, { deps: { taskManager, policies, policyEngine } });
+  await app.register(createCliRouter, { deps: { taskManager, policies, policyEngine, verificationEngine } });
 
   app.get("/health", async () => ({ status: "ok" }));
 

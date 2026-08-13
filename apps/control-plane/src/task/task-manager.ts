@@ -40,8 +40,8 @@ export class TaskManager {
     const id = `TASK-${String(this.nextTaskSeq()).padStart(3, "0")}`;
     this.db
       .prepare(
-        `INSERT INTO tasks (id, request, status, complexity, risk, sandbox_mode, flags, attempt, created_at, updated_at)
-         VALUES (?, ?, 'CREATED', ?, ?, ?, '[]', 1, ?, ?)`,
+      `INSERT INTO tasks (id, request, status, complexity, risk, sandbox_mode, workspace, flags, attempt, created_at, updated_at)
+          VALUES (?, ?, 'CREATED', ?, ?, ?, ?, '[]', 1, ?, ?)`,
       )
       .run(
         id,
@@ -49,6 +49,7 @@ export class TaskManager {
         input.complexity ?? null,
         input.risk ?? null,
         input.sandboxMode ?? null,
+        input.workspace ?? null,
         now,
         now,
       );
@@ -63,6 +64,7 @@ export class TaskManager {
       complexity: (r.complexity as TaskRow["complexity"]) ?? null,
       risk: (r.risk as TaskRow["risk"]) ?? null,
       sandboxMode: (r.sandbox_mode as TaskRow["sandboxMode"]) ?? null,
+      workspace: (r.workspace as string | null) ?? null,
       flags: JSON.parse(String(r.flags)) as string[],
       attempt: Number(r.attempt),
       createdAt: String(r.created_at),
@@ -221,6 +223,7 @@ export class TaskManager {
       complexity: task.complexity ?? undefined,
       risk: task.risk ?? undefined,
       flags: task.flags,
+      workspace: task.workspace ?? undefined,
       createdAt: task.createdAt,
       evidence:
         evidence.count > 0

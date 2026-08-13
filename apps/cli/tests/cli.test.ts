@@ -112,13 +112,15 @@ test("workers list / policy validate / sandbox check / strategy / logs / cloud u
   assert.ok(cu.lines.join("\n").includes("local_only"));
 });
 
-test("verify 對 stub 回 501 錯誤訊息", async () => {
-  await fakeRun(["task", "run", "verify 測試"]);
+test("verify 回傳 sandbox 驗證結果（T012/T016 接入）", async () => {
+  const ws = mkdtempSync(join(tmpdir(), "acp-cli-verify-"));
+  await fakeRun(["task", "run", "verify 測試", "--workspace", ws]);
   const listRes = await fakeRun(["task", "list"]);
   const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split("\t")[0]!;
-  const res = await fakeRun(["verify", id]);
-  assert.equal(res.code, 1);
-  assert.ok(res.lines.join("\n").includes("T012/T016"));
+  const res = await fakeRun(["verify", id, "--sandbox", "seatbelt"]);
+  assert.equal(res.code, 0, `verify 失敗: ${res.lines.join("\n")}`);
+  assert.ok(res.lines.join("\n").includes("git_diff"), "應包含 verifier 結果");
+  rmSync(ws, { recursive: true, force: true });
 });
 
 test("不存在的任務回 exit 1", async () => {

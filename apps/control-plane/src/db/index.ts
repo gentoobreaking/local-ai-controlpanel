@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     complexity TEXT,
     risk TEXT,
     sandbox_mode TEXT,
+    workspace TEXT,
     flags TEXT NOT NULL DEFAULT '[]',
     attempt INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,

@@ -50,7 +50,7 @@ export class VerificationEngine {
   async verify(
     ctx: VerificationContext,
     plugins: VerificationPlugin[],
-  ): Promise<VerificationResult[]> {
+  ): Promise<{ sandbox: string; results: VerificationResult[] }> {
     const sandbox = await selectSandbox(this.deps.registry, ctx.task, this.deps.policy);
     const results: VerificationResult[] = [];
     for (const plugin of plugins) {
@@ -71,6 +71,6 @@ export class VerificationEngine {
       results.push(result);
       await this.deps.record(ctx.taskId, ctx.attempt, result, sandbox.name);
     }
-    return results;
+    return { sandbox: sandbox.name, results };
   }
 }

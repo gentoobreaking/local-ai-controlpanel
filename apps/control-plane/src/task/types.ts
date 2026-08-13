@@ -39,6 +39,8 @@ export interface TaskRow {
   complexity: Complexity | null;
   risk: RiskLevel | null;
   sandboxMode: SandboxMode | null;
+  /** workspace 根目錄（建驗證用，§21.2）；未指定為 null */
+  workspace: string | null;
   flags: string[];
   attempt: number;
   createdAt: string;
@@ -60,6 +62,7 @@ export interface TaskDetail extends TaskSummary {
   complexity?: Complexity;
   risk?: RiskLevel;
   flags?: string[];
+  workspace?: string;
   createdAt: string;
   evidence?: {
     count: number;
@@ -75,6 +78,7 @@ export interface TaskDetail extends TaskSummary {
 
 export interface CreateTaskInput {
   userRequest: string;
+  workspace?: string;
   sandboxMode?: SandboxMode;
   complexity?: Complexity;
   risk?: RiskLevel;
