@@ -107,6 +107,12 @@ def run_pipeline(
   return dedup
 
 
+def estimate_tokens(claim: str) -> int:
+  """token 估算（deterministic，§13）：max(1, ceil(claim.length/4))。
+  禁止 LLM 逐條估算。"""
+  return max(1, math.ceil(len(claim) / 4))
+
+
 def build_bundle(
   taskId: str,
   facts: list[Evidence],
@@ -114,32 +120,48 @@ def build_bundle(
   versions: dict[str, str] | None = None,
   unresolvedQuestions: list[str] | None = None,
   tokenBudget: int = 8000,
+  minRelevance: float = 0.0,
 ) -> EvidenceBundle:
-  # token 估算（deterministic）：max(1, ceil(claim.length/4))
-  import math
+  """Evidence Shaping（§12.2，確定性規則，不可由 LLM 決定）：
 
-  estimated = sum(max(1, math.ceil(len(e.claim) / 4)) for e in facts)
+  1. constraints / versions 完整保留（優先度最高，不可截斷）
+  2. facts 依 relevance × confidence 由高到低保留，直到 token 預算用盡
+  3. unresolvedQuestions 摘要式單行（完整保留）
+  4. 截斷 → truncated=true + droppedFactIds；unresolvedQuestions 追加「另有 N 筆...」
+  """
+  # min_relevance 過濾（§30 evidence.min_relevance；確定性門檻）
+  kept_facts = [e for e in facts if e.relevance >= minRelevance]
+  dropped_low_relevance = [e.id for e in facts if e.relevance < minRelevance]
+
+  # 依 relevance × confidence 由高到低排序（shaping 截斷順序）
+  ranked = sorted(
+    kept_facts,
+    key=lambda e: (e.relevance * e.confidence, e.relevance, e.confidence),
+    reverse=True,
+  )
+
+  estimated = sum(estimate_tokens(e.claim) for e in ranked)
   bundle = EvidenceBundle(
     id=f"bundle-{taskId[:8]}",
     taskId=taskId,
-    facts=facts,
+    facts=ranked,
     constraints=constraints,
     versions=versions or {},
     unresolvedQuestions=unresolvedQuestions or [],
-  confidence=_bundle_confidence(facts),
+    confidence=_bundle_confidence(ranked),
     generatedAt=datetime.now(timezone.utc).isoformat(),
     tokenBudget=tokenBudget,
     estimatedTokens=estimated,
     truncated=estimated > tokenBudget,
   )
-  # Shaping（§12.2）：超過預算從低 priority facts 截斷（constraints/versions 保留）
+
+  # 截斷（§12.2）：從低分 facts 開始丟，constraints/versions 完整保留
+  dropped: list[str] = list(dropped_low_relevance)
   if bundle.truncated:
     kept: list[Evidence] = []
     budget = tokenBudget
-    dropped: list[str] = []
-    # constraints & versions 完整保留不計入 token
-    for e in facts:
-      tok = max(1, math.ceil(len(e.claim) / 4))
+    for e in ranked:
+      tok = estimate_tokens(e.claim)
       if budget - tok >= 0:
         kept.append(e)
         budget -= tok
@@ -148,6 +170,12 @@ def build_bundle(
     bundle.facts = kept
     bundle.droppedFactIds = dropped
     extra = f"另有 {len(dropped)} 筆證據因超過 token 預算未提供"
+    if extra not in bundle.unresolvedQuestions:
+      bundle.unresolvedQuestions.append(extra)
+  elif dropped_low_relevance:
+    # 低 relevance 被門檻過濾（未觸發 token 截斷）——也須記錄，避免靜默遺失
+    bundle.droppedFactIds = dropped_low_relevance
+    extra = f"另有 {len(dropped_low_relevance)} 筆證據因低 relevance（<{minRelevance}）未提供"
     if extra not in bundle.unresolvedQuestions:
       bundle.unresolvedQuestions.append(extra)
   return bundle
