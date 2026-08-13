@@ -28,6 +28,13 @@ research:
     documentation: true
     git_history: true
     web: true
+  # §14.2 降級政策：research 重試耗盡後的行為
+  # allow_local 僅適用低/中風險 + 本地證據足夠；high risk 一律 block（§14.2 鐵律）
+  research_failure:
+    on_partial: allow_local
+    on_failed: ask_user        # 完全失敗 → 問使用者（不擅自降級）
+    max_retries: 2             # §14.4 卡死防護：重試 ×2 後才降級判定
+    retry_backoff_seconds: [5, 30]
 
 evidence:
   max_tokens: 8000

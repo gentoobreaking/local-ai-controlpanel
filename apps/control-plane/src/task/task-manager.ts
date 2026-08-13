@@ -173,6 +173,31 @@ export class TaskManager {
       .run(randomUUID(), id, kind, actor, reason ?? null, new Date().toISOString());
   }
 
+  /** §36.2 Prevention Rate：記錄 evidence gate 決策（BLOCK 計入分子）。 */
+  recordGateBlock(
+    id: string,
+    decision: string,
+    stage1: string,
+    stage2: string,
+    reason: string,
+    retriesUsed = 0,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO gate_blocks (id, task_id, decision, stage1, stage2, reason, retries_used, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), id, decision, stage1, stage2, reason, retriesUsed, new Date().toISOString());
+  }
+
+  /** §36.2：gate block 總數（供 Prevention Rate 計算）。 */
+  gateBlockCount(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS c FROM gate_blocks WHERE decision = 'BLOCK'`)
+      .get() as { c: number };
+    return Number(row.c);
+  }
+
   evidenceCount(id: string): { count: number; confidence: number | null } {
     const row = this.db
       .prepare(

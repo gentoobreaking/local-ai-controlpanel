@@ -176,6 +176,21 @@ CREATE TABLE IF NOT EXISTS approvals (
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
+-- §36.2 Prevention Rate 資料基礎：evidence gate block 次數記錄
+CREATE TABLE IF NOT EXISTS gate_blocks (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    decision TEXT NOT NULL,          -- BLOCK / RESEARCH_AGAIN / DEGRADED
+    stage1 TEXT NOT NULL,
+    stage2 TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    retries_used INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+CREATE INDEX IF NOT EXISTS idx_gate_blocks_task ON gate_blocks(task_id);
+CREATE INDEX IF NOT EXISTS idx_gate_blocks_created ON gate_blocks(created_at);
+
 CREATE TABLE IF NOT EXISTS app_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

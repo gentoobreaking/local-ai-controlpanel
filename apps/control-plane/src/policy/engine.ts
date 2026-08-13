@@ -157,6 +157,22 @@ export class PolicyEngine {
     return { decision: "PASS" };
   }
 
+  /** §14.2 降級政策查詢：research 失敗後的 on_partial / on_failed 行為。 */
+  researchFailurePolicy(): {
+    onPartial: "allow_local" | "ask_user" | "block";
+    onFailed: "allow_local" | "ask_user" | "block";
+    maxRetries: number;
+    retryBackoffSeconds: number[];
+  } {
+    const rf = this.research.research_failure;
+    return {
+      onPartial: rf?.on_partial ?? "allow_local",
+      onFailed: rf?.on_failed ?? "ask_user",
+      maxRetries: rf?.max_retries ?? 2,
+      retryBackoffSeconds: rf?.retry_backoff_seconds ?? [5, 30],
+    };
+  }
+
   /**
    * evaluateEscalation：型別預留。Phase 1–5 一律 NOT_SUPPORTED（§25）。
    */

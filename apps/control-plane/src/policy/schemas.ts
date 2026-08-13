@@ -18,6 +18,19 @@ const ResearchPolicySchema = z.object({
       web: z.boolean().optional(),
     })
     .optional(),
+  // §14.2 降級政策：research 失敗時的行為（retry 次數由 §14.4 卡死防護處理）
+  research_failure: z
+    .object({
+      on_partial: z
+        .enum(["allow_local", "ask_user", "block"])
+        .optional(),
+      on_failed: z
+        .enum(["allow_local", "ask_user", "block"])
+        .optional(),
+      max_retries: z.number().int().min(0).max(3).optional(),
+      retry_backoff_seconds: z.array(z.number()).optional(),
+    })
+    .optional(),
 });
 
 const EvidencePolicySchema = z.object({
