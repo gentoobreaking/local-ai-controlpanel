@@ -43,6 +43,42 @@ pnpm tauri dev      # Desktop UI（需 Control Plane 於 127.0.0.1:3001）
 pnpm tauri build    # 打包 .app/.dmg
 ```
 
+## Pi Worker 模型接入
+
+Pi Worker（`apps/control-plane/src/worker/`）透過 OpenAI-compatible endpoint 串接本地推理引擎，預設 **llama.cpp**（spec §16 原始設計）。連不到時自動降級 stub 快速路徑（§16 備註），`allowStub=false` 可強制真實模型。
+
+### 預設：llama.cpp（:8080）
+
+```bash
+# 1) 啟動 llama-server（已測試 qwen2.5-coder-7b Q4_K_M，13.6 t/s）
+llama-server -m ~/Projects/mindnav-codeagent/models/qwen2.5-coder-7b-instruct.Q4_K_M.gguf \
+  --host 127.0.0.1 --port 8080 -c 8192 --n-gpu-layers 99
+
+# 2) Control Plane 零配置（baseUrl 預設 http://127.0.0.1:8080）
+pnpm cp:dev
+```
+
+### 切換：ollama（:11434）
+
+```bash
+# 只需設 baseUrl（client 自動拼 /v1/chat/completions；勿帶 /v1）
+LLAMA_BASE_URL=http://127.0.0.1:11434 pnpm cp:dev
+
+# 確認模型存在（policy 預設 qwen2.5-coder:7b）
+ollama list
+```
+
+> 註：ollama 無 `/health` 端點（404）→ client 會 fallback 到根路徑（200）→ 判定可達 → 走 llama 模式。
+
+### 環境變數
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `LLAMA_BASE_URL` | `http://127.0.0.1:8080` | llama.cpp / ollama 的 base URL（勿帶 `/v1`） |
+| `LLAMA_TIMEOUT_MS` | `300000` | llama 模式生成超時（7B CPU 生成 patch 需 30–120s） |
+
+> 驗證：`curl http://127.0.0.1:8080/health` → `{"status":"ok"}`（llama.cpp）；ollama 檢查 `curl http://127.0.0.1:11434` 回 `Ollama is running`。
+
 ## 任務進度
 
 | 任務 | 內容 | 狀態 |
