@@ -17,6 +17,7 @@ import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
 import { VerificationEngine } from "./verification/engine.js";
 import { createDefaultWorkerRegistry, type WorkerRegistry } from "./worker/registry.js";
+import { PiWorker } from "./worker/pi-worker.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -50,7 +51,12 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const bus = createTaskBus();
   const policies = loadPolicies(config.policiesDir);
   const policyEngine = new PolicyEngine(policies);
-  const workerRegistry = createDefaultWorkerRegistry();
+  const workerRegistry = createDefaultWorkerRegistry({
+    // llama 模式生成超時可經由 env 覆寫（預設 5 分鐘，7B CPU 生成 patch 需 30–120s）
+    piWorker: new PiWorker({
+      llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
+    }),
+  });
   const runner = createRunner(taskManager, bus, policyEngine, { workerRegistry });
   const registry = createDefaultRegistry({
     seatbeltProfile: resolveSeatbeltProfile(policies),

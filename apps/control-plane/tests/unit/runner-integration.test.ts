@@ -41,6 +41,10 @@ test("T021：有 registry 時 IMPLEMENTING → PiWorker stub → ARTIFACT_VALIDA
   const bus = createTaskBus();
   const engine = new PolicyEngine(loadPolicies(policiesDir));
   const registry = new WorkerRegistry();
+  // 短 ping 超時 + 指向必定不可達的 port：無論本機 llama.cpp 是否在跑，都強制走 stub 路徑
+  // （集成測試不可依賴外部 llama-server 狀態）
+  const worker = new PiWorker({ pingTimeoutMs: 200 });
+  await worker.initialize({ baseUrl: "http://127.0.0.1:1", model: "test-model", workspaceRoot: "/tmp" });
   registry.register(
     {
       id: "pi-local",
@@ -53,8 +57,7 @@ test("T021：有 registry 時 IMPLEMENTING → PiWorker stub → ARTIFACT_VALIDA
       supportsMCP: true,
       enabled: true,
     },
-    // 短 ping 超時：llama.cpp 不存在時快速落入 stub 路徑
-    new PiWorker({ pingTimeoutMs: 200 }),
+    worker,
   );
   const runner = createRunner(tm, bus, engine, { workerRegistry: registry });
   const task = tm.create({ userRequest: "implement feature X" });

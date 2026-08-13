@@ -34,9 +34,12 @@ export interface PiWorkerOptions {
   allowStub?: boolean;
   /** llama.cpp endpoint 探測超時（ms），預設 3000。 */
   pingTimeoutMs?: number;
+  /** llama 模式生成超時（ms），預設 300_000（5 分鐘；7B 在 CPU 上生成 patch 可達 60s+）。 */
+  llamaTimeoutMs?: number;
 }
 
 const DEFAULT_STUB_TIMEOUT_MS = 5_000;
+const DEFAULT_LLAMA_TIMEOUT_MS = 300_000;
 
 export class PiWorker implements CodingWorker {
   readonly id = "pi-local";
@@ -46,10 +49,12 @@ export class PiWorker implements CodingWorker {
   private interruptedFlag = false;
   private readonly allowStub: boolean;
   private readonly pingTimeoutMs: number;
+  private readonly llamaTimeoutMs: number;
 
   constructor(opts: PiWorkerOptions = {}) {
     this.allowStub = opts.allowStub ?? true;
     this.pingTimeoutMs = opts.pingTimeoutMs ?? 3_000;
+    this.llamaTimeoutMs = opts.llamaTimeoutMs ?? DEFAULT_LLAMA_TIMEOUT_MS;
   }
 
   get mode(): "llama" | "stub" {
@@ -57,6 +62,10 @@ export class PiWorker implements CodingWorker {
   }
 
   async initialize(context: WorkerContext): Promise<void> {
+    // 冪等：已初始化過（stub 或 llama 模式已定）就不重探測，避免 runner 用不同 baseUrl 覆蓋
+    if (this.client && this.ctx) {
+      return;
+    }
     this.ctx = context;
     this.client = new LlamaClient({
       baseUrl: context.baseUrl,
@@ -152,7 +161,7 @@ export class PiWorker implements CodingWorker {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        { timeoutMs: DEFAULT_STUB_TIMEOUT_MS * 4 },
+        { timeoutMs: this.llamaTimeoutMs },
       );
       const output = res.text;
       if (this.interruptedFlag) {
