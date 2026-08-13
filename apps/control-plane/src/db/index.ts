@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS patches (
     path TEXT NOT NULL,
     status TEXT NOT NULL,
     diff TEXT,
+    workspace_dir TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );

@@ -143,6 +143,7 @@ export const PolicyFileSchemas = {
 } as const;
 
 export type DefaultPolicy = z.infer<typeof DefaultPolicySchema>;
+export type ArtifactPolicy = z.infer<typeof ArtifactPolicySchema>;
 export type CodingPolicy = z.infer<typeof CodingFileSchema>;
 export type ResearchPolicyFile = z.infer<typeof ResearchFileSchema>;
 export type SecurityPolicy = z.infer<typeof SecurityFileSchema>;
