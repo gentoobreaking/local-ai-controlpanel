@@ -1,19 +1,24 @@
-// GET /api/v1/sandbox（spec §45.5）— T008 stub：
-// 以 which 偵測後端可用性；正式 SandboxRegistry 於 T012/T016 接入。
+// GET /api/v1/sandbox（spec §45.5）：以 SandboxRegistry 的 isAvailable 探測
+// 四後端真實狀態（T013/T014/T015 起為真）。
 
-import { spawnSync } from "node:child_process";
 import type { FastifyInstance } from "fastify";
+import type { SandboxRegistry } from "../sandbox/registry.js";
 
-function available(cmd: string): boolean {
-  const r = spawnSync("which", [cmd], { stdio: "ignore" });
-  return r.status === 0;
-}
-
-export async function createSandboxRouter(app: FastifyInstance): Promise<void> {
-  app.get("/api/v1/sandbox", async () => ({
-    bwrap: available("bwrap"),
-    seatbelt: available("sandbox-exec"),
-    shuru: available("shuru"),
-    docker: available("docker"),
-  }));
+export async function createSandboxRouter(
+  app: FastifyInstance,
+  opts: { deps: { registry: SandboxRegistry } },
+): Promise<void> {
+  const { registry } = opts.deps;
+  app.get("/api/v1/sandbox", async () => {
+    const probe = async (name: string) => {
+      const sb = registry.get(name);
+      return sb ? sb.isAvailable() : false;
+    };
+    return {
+      bwrap: await probe("bwrap"),
+      seatbelt: await probe("seatbelt"),
+      shuru: await probe("shuru"),
+      docker: await probe("docker"),
+    };
+  });
 }

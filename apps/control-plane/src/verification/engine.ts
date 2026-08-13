@@ -12,7 +12,12 @@ export interface VerificationEngineDeps {
   registry: SandboxRegistry;
   /** §21.2 policy 參數（security.yaml 的 sandbox/securityLevel） */
   policy: { sandbox?: { mode?: string }; securityLevel?: string };
-  record(result: VerificationResult, sandboxMode: string): Promise<void> | void;
+  record(
+    taskId: string,
+    attempt: number,
+    result: VerificationResult,
+    sandboxMode: string,
+  ): Promise<void> | void;
 }
 
 function mapResult(
@@ -64,7 +69,7 @@ export class VerificationEngine {
       });
       const result = mapResult(plugin, run);
       results.push(result);
-      await this.deps.record(result, sandbox.name);
+      await this.deps.record(ctx.taskId, ctx.attempt, result, sandbox.name);
     }
     return results;
   }

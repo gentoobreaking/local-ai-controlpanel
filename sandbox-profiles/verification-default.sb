@@ -1,16 +1,22 @@
 (version 1)
 (deny default)
 
-;; 檔案系統：專案目錄可讀寫，系統目錄唯讀（spec §28.1）
-(allow file-read* (require-any
-  (subpath "/tmp") (subpath "/usr") (subpath "/bin")
-  (subpath "/lib") (subpath "/opt/homebrew")
-  (subpath "/System/Library") (subpath "/Library/Developer/CommandLineTools")))
+;; 可執行任意 binary（default-deny 下需顯式 process-exec）
+(allow process-exec)
+(allow process-fork)
+
+;; 檔案系統：全域唯讀（§28.1：系統目錄唯讀），/tmp 可寫
+;; workspace 寫入規則由 adapter 於執行時動態附加（buildSeatbeltProfile）
+(allow file-read* (subpath "/"))
 (allow file-write* (subpath "/tmp"))
 
-;; Network 拒絕（預設關閉網路）
-(deny network*)
-
-;; 資源限制
-(allow process-fork)
+;; 系統資源（node/npm/pytest 等 verifier 需要；macOS 26 上缺一即 exec 失敗）
 (allow sysctl-read)
+(allow mach-lookup)
+(allow mach-host*)
+(allow iokit-open)
+(allow ipc-posix-sem)
+(allow ipc-posix-shm-read*)
+
+;; Network 拒絕（預設關閉網路；adapter 可動態改為 allow network*）
+(deny network*)

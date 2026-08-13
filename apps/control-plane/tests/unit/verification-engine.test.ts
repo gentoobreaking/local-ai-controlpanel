@@ -96,12 +96,12 @@ function makeCtx(ws: string, over: Partial<VerificationContext> = {}): Verificat
   };
 }
 
-const recorded: { result: { verifier: string; status: string }; mode: string }[] = [];
+const recorded: { result: { verifier: string; status: string }; mode: string; taskId: string }[] = [];
 const engine = new VerificationEngine({
   registry,
   policy: {},
-  record(r, mode) {
-    recorded.push({ result: { verifier: r.verifier, status: r.status }, mode });
+  record(taskId, _attempt, r, mode) {
+    recorded.push({ result: { verifier: r.verifier, status: r.status }, mode, taskId });
   },
 });
 
@@ -184,10 +184,11 @@ test("record 寫入 sandbox_mode", async () => {
 });
 
 test("無可用 sandbox → throw（rule-8 不降級為 host 執行）", async () => {
-  const empty = new SandboxRegistry();
   const dead = new SandboxRegistry();
   dead.register("seatbelt", () => ({ name: "seatbelt" as const, async isAvailable() { return false; }, async run() { throw new Error("never"); } }));
   const e3 = new VerificationEngine({ registry: dead, policy: {}, record() {} });
-  await assert.rejects(() => e3.verify(makeCtx(workspaces[0]!), DEFAULT_VERIFIERS), /No sandbox available/);
-  assert.ok(empty);
+  await assert.rejects(
+    () => e3.verify(makeCtx(workspaces[0]!), DEFAULT_VERIFIERS),
+    /No sandbox available/,
+  );
 });
