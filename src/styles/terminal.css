@@ -1,0 +1,345 @@
+/* Agent Control Plane — terminal theme (opencode 風格，spec §45.4) */
+
+:root {
+  --bg: #0d1117;
+  --bg-panel: #161b22;
+  --bg-active: #1c2128;
+  --border: #30363d;
+  --fg: #c9d1d9;
+  --fg-dim: #8b949e;
+  --accent: #3fb950;
+  --accent-blue: #58a6ff;
+  --danger: #f85149;
+  --warn: #d29922;
+  --font-mono: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── TopBar ─────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.topbar-title {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.topbar-sep {
+  color: var(--fg-dim);
+}
+
+.topbar-meta {
+  color: var(--fg-dim);
+}
+
+.badge {
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+.badge-ok {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.badge-warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge-dim {
+  color: var(--fg-dim);
+}
+
+/* ── Layout ─────────────────────────────────────────── */
+
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── TaskList ───────────────────────────────────────── */
+
+.tasklist {
+  width: 260px;
+  min-width: 200px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  overflow-y: auto;
+}
+
+.tasklist-header {
+  padding: 8px 12px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.tasklist-empty {
+  padding: 12px;
+  color: var(--fg-dim);
+}
+
+.tasklist ul {
+  list-style: none;
+}
+
+.task-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.task-item:hover {
+  background: var(--bg-active);
+}
+
+.task-item-active {
+  background: var(--bg-active);
+  border-left-color: var(--accent);
+}
+
+.task-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-item-attempt {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.st-pass {
+  color: var(--accent);
+}
+
+.st-fail {
+  color: var(--danger);
+}
+
+.st-run {
+  color: var(--warn);
+}
+
+.st-idle {
+  color: var(--fg-dim);
+}
+
+/* ── TaskStream ─────────────────────────────────────── */
+
+.stream {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stream-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.conn-ok {
+  color: var(--accent);
+}
+
+.conn-bad {
+  color: var(--warn);
+}
+
+.stream-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.stream-empty {
+  color: var(--fg-dim);
+}
+
+.ev {
+  padding: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ev-stage {
+  color: var(--accent-blue);
+}
+
+.ev-evidence {
+  color: var(--fg);
+}
+
+.ev-pass {
+  color: var(--accent);
+}
+
+.ev-fail {
+  color: var(--danger);
+}
+
+.ev-reflection {
+  color: var(--warn);
+}
+
+.ev-done {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ev-output {
+  margin: 4px 0 4px 16px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  color: var(--fg);
+}
+
+/* ── InputBar ───────────────────────────────────────── */
+
+.inputbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.inputbar-prompt {
+  color: var(--accent);
+}
+
+.inputbar-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.inputbar-input::placeholder {
+  color: var(--fg-dim);
+}
+
+.inputbar-hint {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+/* ── CommandPalette ─────────────────────────────────── */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.palette {
+  width: 560px;
+  max-height: 60vh;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.palette-input {
+  padding: 10px 12px;
+  background: var(--bg-active);
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-list {
+  list-style: none;
+  overflow-y: auto;
+}
+
+.palette-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.palette-item:hover {
+  background: var(--bg-active);
+}
+
+.palette-label {
+  color: var(--accent-blue);
+}
+
+.palette-hint {
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-empty {
+  padding: 12px;
+  color: var(--fg-dim);
+}

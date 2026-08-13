@@ -1,0 +1,19 @@
+[package]
+name = "acp-desktop"
+version = "0.5.0"
+description = "Agent Control Plane Desktop UI (opencode 風格終端介面)"
+authors = ["Agent Control Plane"]
+edition = "2021"
+
+[lib]
+name = "acp_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

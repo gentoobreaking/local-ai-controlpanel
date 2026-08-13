@@ -1,0 +1,17 @@
+# Rust 產物
+src-tauri/target/
+src-tauri/gen/
+
+# Node 產物
+node_modules/
+dist/
+
+# Tauri 打包產物
+src-tauri/target/release/bundle/
+
+# 圖示（需用 `pnpm tauri icon` 產生，見 README）
+src-tauri/icons/
+
+# 環境
+.env
+.env.local
