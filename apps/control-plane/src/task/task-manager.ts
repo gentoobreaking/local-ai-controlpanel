@@ -157,6 +157,20 @@ export class TaskManager {
       .run(randomUUID(), id, attempt, worker, model, new Date().toISOString());
   }
 
+  recordApproval(
+    id: string,
+    kind: string,
+    actor: string,
+    reason?: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO approvals (id, task_id, kind, actor, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), id, kind, actor, reason ?? null, new Date().toISOString());
+  }
+
   evidenceCount(id: string): { count: number; confidence: number | null } {
     const row = this.db
       .prepare(
