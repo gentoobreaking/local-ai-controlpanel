@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task.schema.json",
+  "title": "Task",
+  "description": "Core Domain Model：Task（spec §8）",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "userRequest": { "type": "string" },
+    "status": { "type": "string" },
+    "complexity": { "type": "string" },
+    "risk": { "type": "string" },
+    "sandboxMode": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "required": ["id", "userRequest", "status", "createdAt", "updatedAt"]
+}

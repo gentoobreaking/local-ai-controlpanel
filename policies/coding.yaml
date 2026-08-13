@@ -1,0 +1,21 @@
+# Coding 政策（§10）：Artifact / Tool / Verification 的 coding 面向。
+# T010 Policy Engine 載入。
+
+artifact:
+  allowed:
+    - "src/**"
+    - "lib/**"
+    - "tests/**"
+  readonly:
+    - "package-lock.json"
+    - "go.mod"
+    - "go.sum"
+  forbidden:
+    - ".git/**"
+    - ".env"
+    - "secrets/**"
+
+verification:
+  required:
+    - unit_test
+    - lint

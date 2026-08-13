@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "policy.schema.json",
+  "title": "Policy",
+  "description": "Policy 檔結構（spec §10 / §30）",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string" },
+    "execution": { "type": "object" },
+    "research": { "type": "object" },
+    "evidence": { "type": "object" },
+    "artifact": { "type": "object" },
+    "verification": { "type": "object" },
+    "retry": { "type": "object" },
+    "permissions": { "type": "object" },
+    "sandbox": { "type": "object" },
+    "escalation": { "type": "object" }
+  },
+  "required": ["version"]
+}

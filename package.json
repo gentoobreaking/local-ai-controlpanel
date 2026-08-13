@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "typecheck": "pnpm -r typecheck",
+    "cp:dev": "pnpm --filter @acp/control-plane dev",
+    "cp:build": "pnpm --filter @acp/control-plane build",
+    "cp:test": "pnpm --filter @acp/control-plane test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -1,0 +1,26 @@
+# Research 政策（§10 / §12.1 / §30）
+# 來源優先順序：repo → git history → package metadata → 官方 docs → GitHub upstream → trusted → web。
+
+research:
+  enabled: true
+  required_when:
+    - unknown_dependency
+    - version_sensitive
+    - external_api
+    - unfamiliar_framework
+    - unfamiliar_repository
+    - external_specification
+    - security_sensitive
+    - low_confidence
+  minimum_sources: 2
+  official_source_preferred: true
+  preferred_sources:
+    - official_documentation
+    - repository
+    - upstream_issue
+  max_rounds: 3
+  retrievers:
+    repository: true
+    documentation: true
+    git_history: true
+    web: true

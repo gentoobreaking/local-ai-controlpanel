@@ -1,0 +1,15 @@
+# Escalation 政策（spec §25，v0.4）
+# Phase 1–5 硬性關閉；Phase 9 才依此啟用。僅供型別/設定預留（T010 載入）。
+
+escalation:
+  enabled: false
+  conditions:
+    - repeated_verification_failure
+    - insufficient_model_capability
+    - conflicting_evidence
+    - high_risk_change
+  target:
+    worker: pi
+    model: cloud
+  cloud:
+    mode: reviewer_first    # reviewer → planner → executor

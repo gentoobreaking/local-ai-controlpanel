@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "worker.schema.json",
+  "title": "WorkerDescriptor",
+  "description": "Worker Registry Descriptor（spec §17）",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "runtime": { "type": "string" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "models": { "type": "array", "items": { "type": "string" } },
+    "locality": { "enum": ["local", "remote"] },
+    "costClass": { "enum": ["free", "low", "high"] },
+    "supportsACP": { "type": "boolean" },
+    "supportsMCP": { "type": "boolean" }
+  },
+  "required": ["id", "runtime", "capabilities", "models", "locality"]
+}

@@ -1,0 +1,78 @@
+# Agent Control Plane 預設政策（spec §10 / §30）
+# T010 起由 Policy Engine 載入；Phase 1–5 強制 local_only。
+
+version: "2"
+
+execution:
+  strategy: local_first
+  local:
+    worker: pi-local
+    model: qwen-9b
+    max_attempts: 3
+  allow_cloud: false            # Phase 1–5 硬性禁止（§24）
+
+research:
+  enabled: true
+  required_when:
+    - unknown_dependency
+    - version_sensitive
+    - external_api
+    - unfamiliar_framework
+    - security_sensitive
+    - low_confidence
+  minimum_sources: 2
+  official_source_preferred: true
+  max_rounds: 3
+  retrievers:
+    repository: true
+    documentation: true
+    git_history: true
+    web: true
+
+evidence:
+  max_tokens: 8000
+  min_relevance: 0.3
+  budget_percent: 0.4
+
+artifact:
+  allowed:
+    - "src/**"
+    - "lib/**"
+    - "tests/**"
+  readonly:
+    - "package-lock.json"
+    - "go.mod"
+    - "go.sum"
+  forbidden:
+    - ".git/**"
+    - ".env"
+    - "secrets/**"
+
+verification:
+  required:
+    - unit_test
+    - lint
+
+retry:
+  enabled: true
+  max_attempts: 3
+  on:
+    coding_error: retry
+    knowledge_error: research
+    requirement_error: ask_user
+    environment_error: repair
+    tool_error: retry
+    model_limitation: stop        # Phase 1–5 = STOP（§24）
+
+permissions:
+  filesystem:
+    read: true
+    write: policy-controlled
+  shell:
+    enabled: true
+    sandbox: true
+  git:
+    read: true
+    write: policy-controlled
+  network:
+    enabled: false               # 本地 Worker 預設禁止；僅 Research Engine 有網

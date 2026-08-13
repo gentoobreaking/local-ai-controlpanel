@@ -1,0 +1,36 @@
+# 安全政策（spec §28 Security Boundary / §28.1 default-deny）
+# T010 起由 Policy Engine 載入。
+
+securityLevel: medium
+
+permissions:
+  filesystem:
+    read: true
+    write: policy-controlled
+  shell:
+    enabled: true
+    sandbox: true
+  git:
+    read: true
+    write: policy-controlled
+  network:
+    enabled: false
+
+sandbox:
+  mode: "auto"               # auto | bwrap | seatbelt | shuru | docker
+  macos_default: "seatbelt"
+  linux_default: "bwrap"
+
+# v0.4 預留：Phase 9 才啟用（§25）
+escalation:
+  enabled: false
+  conditions:
+    - repeated_verification_failure
+    - insufficient_model_capability
+    - conflicting_evidence
+    - high_risk_change
+  target:
+    worker: pi
+    model: cloud
+  cloud:
+    mode: reviewer_first

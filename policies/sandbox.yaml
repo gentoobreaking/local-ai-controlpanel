@@ -1,0 +1,23 @@
+# Sandbox 政策（spec §21.2 / §30，v0.5）
+# verification.sandbox.mode 決定預設後端；selectSandbox 依 §21.2 五步邏輯。
+
+sandbox:
+  mode: "auto"               # auto | bwrap | seatbelt | shuru | docker
+  macos_default: "seatbelt"
+  linux_default: "bwrap"
+  bwrap:
+    ro_bind: ["/usr", "/lib", "/bin", "/opt/homebrew"]
+    bind: ["workspace", "/tmp"]
+    unshare: { net: true, ipc: true, pid: true }
+    cap_drop: ALL
+  seatbelt:
+    profile: "sandbox-profiles/verification-default.sb"
+  shuru:
+    image: "shuru/alpine:3.20"
+    memory: "512MiB"
+    cpus: "1"
+    network: false
+    snapshot: true
+  docker:
+    image: "python:3.12-slim"
+    network: false

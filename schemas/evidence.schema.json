@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "evidence.schema.json",
+  "title": "Evidence",
+  "description": "Evidence 一級物件（spec §13）",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "claim": { "type": "string" },
+    "source": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["official", "repository", "github", "issue", "web"] },
+        "uri": { "type": "string" },
+        "title": { "type": "string" },
+        "publisher": { "type": "string" }
+      },
+      "required": ["type", "uri"]
+    },
+    "version": { "type": "string" },
+    "confidence": { "type": "number" },
+    "relevance": { "type": "number" },
+    "retrievedAt": { "type": "string" },
+    "contentHash": { "type": "string" }
+  },
+  "required": ["id", "claim", "source", "confidence", "relevance"]
+}

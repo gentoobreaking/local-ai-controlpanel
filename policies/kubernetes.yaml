@@ -1,0 +1,11 @@
+# Kubernetes 政策（Phase 11+ 使用情境；目前為佔位範本，§10）
+artifact:
+  allowed:
+    - "config/controller/**"
+    - "pkg/controller/**"
+  readonly:
+    - "go.mod"
+    - "go.sum"
+  forbidden:
+    - "deploy/**"
+    - "secrets/**"

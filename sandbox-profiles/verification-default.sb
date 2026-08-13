@@ -1,0 +1,16 @@
+(version 1)
+(deny default)
+
+;; 檔案系統：專案目錄可讀寫，系統目錄唯讀（spec §28.1）
+(allow file-read* (require-any
+  (subpath "/tmp") (subpath "/usr") (subpath "/bin")
+  (subpath "/lib") (subpath "/opt/homebrew")
+  (subpath "/System/Library") (subpath "/Library/Developer/CommandLineTools")))
+(allow file-write* (subpath "/tmp"))
+
+;; Network 拒絕（預設關閉網路）
+(deny network*)
+
+;; 資源限制
+(allow process-fork)
+(allow sysctl-read)
