@@ -59,7 +59,7 @@ pnpm tauri build    # 打包 .app/.dmg
 | T013 | seatbelt（sandbox-exec）adapter + default-deny profile（§28.1） | ✅ done |
 | T014 | bwrap（bubblewrap）adapter + §21.2 template | ✅ done |
 | T015 | shuru（MicroVM）adapter + selectSandbox step-3 fallback | ✅ done |
-| T016 | Sandbox Switch Check + `acp verify --sandbox` 真實引擎（§21.2/§38/§39） | ✅ done |
+| T017 | Research Engine（Python）+ 4 retrievers + HTTP API（§12） | ✅ done |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
