@@ -173,6 +173,23 @@ export class PolicyEngine {
     };
   }
 
+  /** §23 retry policy：max_attempts 上限（缺省 3）。 */
+  retryMaxAttempts(): number {
+    return this.policies.defaultPolicy.retry?.max_attempts ?? 3;
+  }
+
+  /**
+   * §23 retry.on 表：依 failure class 給動作（規範化 repair → repair_environment）。
+   * policy 未定義該 class 時回 undefined（由 reflection engine 用預設映射）。
+   */
+  retryActionFor(classification: string): string | undefined {
+    const on = this.policies.defaultPolicy.retry?.on;
+    if (!on) return undefined;
+    const action = (on as Record<string, string | undefined>)[classification];
+    if (!action) return undefined;
+    return action === "repair" ? "repair_environment" : action;
+  }
+
   /**
    * evaluateEscalation：型別預留。Phase 1–5 一律 NOT_SUPPORTED（§25）。
    */

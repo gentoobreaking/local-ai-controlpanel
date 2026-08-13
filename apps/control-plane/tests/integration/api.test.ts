@@ -26,7 +26,7 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("POST /api/v1/tasks 建立並推進到 RESEARCH_REQUIRED（runner stub）", async () => {
+test("POST /api/v1/tasks 建立並推進到 RESEARCHING（T019/T020 接入後）", async () => {
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/tasks",
@@ -35,7 +35,7 @@ test("POST /api/v1/tasks 建立並推進到 RESEARCH_REQUIRED（runner stub）",
   assert.equal(res.statusCode, 201);
   const body = res.json();
   assert.equal(body.id, "TASK-001");
-  assert.equal(body.status, "RESEARCH_REQUIRED");
+  assert.equal(body.status, "RESEARCHING");
   assert.equal(body.attempt, 1);
   assert.equal(body.userRequest, "add kubernetes deployment support");
 });
@@ -67,7 +67,7 @@ test("GET /api/v1/tasks 列表與 GET /:id 詳細", async () => {
   assert.equal(tasks.length, 2);
   assert.equal(tasks[0]!.id, "TASK-002");
   assert.equal(tasks[0]!.sandboxMode, "seatbelt");
-  assert.equal(tasks[0]!.status, "RESEARCH_REQUIRED");
+  assert.equal(tasks[0]!.status, "RESEARCHING");
 
   const detail = await app.inject({ method: "GET", url: "/api/v1/tasks/TASK-001" });
   const d = detail.json();
@@ -195,5 +195,5 @@ test("SSE：/api/v1/tasks/:id/events 串流 stage 事件（fetch streaming）", 
   assert.ok(events.length >= 1, "expected >=1 SSE event");
   const first = events[0] as { type: string; stage?: string };
   assert.equal(first.type, "stage");
-  assert.ok(["ANALYZING", "POLICY_CHECK", "RESEARCH_REQUIRED"].includes(first.stage!));
+  assert.ok(["ANALYZING", "POLICY_CHECK", "RESEARCH_REQUIRED", "RESEARCHING"].includes(first.stage!));
 });
