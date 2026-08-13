@@ -46,10 +46,12 @@ class Retriever(Protocol):
     ...
 
 
-def _read_files(workspace: str, patterns: list[str], limit: int = 20) -> list[tuple[str, str]]:
+def _read_files(workspace: str | None, patterns: list[str], limit: int = 20) -> list[tuple[str, str]]:
   import pathlib
 
   hits: list[tuple[str, str]] = []
+  if not workspace:
+    return hits
   root = pathlib.Path(workspace)
   if not root.exists():
     return hits
@@ -95,8 +97,8 @@ class RepositoryRetriever:
 class GitHistoryRetriever:
   name = "git_history"
 
-  def retrieve(self, queries: list[str], workspace: str) -> list[RetrieveHit]:
-    cwd = workspace if os.path.isdir(os.path.join(workspace, ".git")) else os.getcwd()
+  def retrieve(self, queries: list[str], workspace: str | None) -> list[RetrieveHit]:
+    cwd = workspace if workspace and os.path.isdir(os.path.join(workspace, ".git")) else os.getcwd()
     out: list[RetrieveHit] = []
     for args in (["log", "--oneline", "-20"], ["log", "-p", "-3"]):
       try:

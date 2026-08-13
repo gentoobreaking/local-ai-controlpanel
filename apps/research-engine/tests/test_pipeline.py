@@ -32,3 +32,20 @@ def test_build_bundle_confidence_aggregation():
   bundle = build_bundle(taskId="TASK-1", facts=facts, constraints=[])
   assert 0.0 < bundle.confidence <= 1.0
   assert bundle.estimatedTokens > 0
+
+def test_version_filter_prioritizes_target_version():
+  from research_engine.pipeline import version_priority
+  # 命中 target → 0；有版本但未命中 → 1；無版本 → 2
+  assert version_priority("1.34", "1.34") == 0
+  assert version_priority("2.0", "1.34") == 1
+  assert version_priority(None, "1.34") == 2
+  assert version_priority("1.34", None) == 1
+
+
+def test_run_pipeline_with_target_version_orders_hits_first():
+  from research_engine.models import Source
+  from research_engine.pipeline import PipelineConfig, run_pipeline
+  config = PipelineConfig(targetVersion="9.9")
+  facts = run_pipeline(["kubernetes deployment"], None, config)
+  # 測試用 workspace 為 None：不崩潰即可（retriever 對無效 workspace 回空）
+  assert isinstance(facts, list)

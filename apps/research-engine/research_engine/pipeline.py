@@ -29,6 +29,17 @@ class PipelineConfig:
   minimumSources: int = 2
   maxFacts: int = 200
   requiredSourceTypes: tuple[str, ...] = ()
+  # Version filter（§12）：以指定版本優先。None = 不篩選。
+  targetVersion: str | None = None
+
+
+def version_priority(version: str | None, target: str | None) -> int:
+  """Version filter 排序鍵：命中 target 優先（0），其次有版本（1），無版本最後（2）。"""
+  if target and version:
+    return 0 if target in version or version in target else 1
+  if version:
+    return 1
+  return 2
 
 
 SOURCE_PRIORITY = ["repository", "git_history", "documentation", "web"]
@@ -70,8 +81,17 @@ def run_pipeline(
     seen.add(key)
     dedup.append(e)
 
-  # 5. 依來源優先序 + relevance 排序
-  dedup.sort(key=lambda e: (_source_rank(e.source.type), -(e.relevance + e.confidence)))
+  # 5. Version filter（§12）：targetVersion 指定時優先保留命中版本
+  #    （不丟棄其他版本——低優先排序，保留於 store；shaping 依此順序截斷）
+  if config.targetVersion:
+    dedup.sort(key=lambda e: (
+      version_priority(e.version, config.targetVersion),
+      _source_rank(e.source.type),
+      -(e.relevance + e.confidence),
+    ))
+  else:
+    # 5. 依來源優先序 + relevance 排序
+    dedup.sort(key=lambda e: (_source_rank(e.source.type), -(e.relevance + e.confidence)))
 
   # 6. Cross-check：來自多來源的相同 claim confidence 加權
   by_claim: dict[str, list[Evidence]] = {}
