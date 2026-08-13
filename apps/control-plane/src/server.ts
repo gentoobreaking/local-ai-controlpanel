@@ -9,6 +9,7 @@ import { createTaskRouter } from "./routes/tasks.js";
 import { createEventRouter } from "./routes/events.js";
 import { createSandboxRouter } from "./routes/sandbox.js";
 import { createStrategyRouter } from "./routes/strategy.js";
+import { createCliRouter } from "./routes/cli.js";
 
 export interface AppDeps {
   config: AppConfig;
@@ -39,6 +40,7 @@ export async function buildApp(opts: { config?: AppConfig } = {}) {
   await app.register(createEventRouter, { deps: { bus, runner } });
   await app.register(createSandboxRouter);
   await app.register(createStrategyRouter, { deps: { taskManager } });
+  await app.register(createCliRouter, { deps: { taskManager } });
 
   app.get("/health", async () => ({ status: "ok" }));
 

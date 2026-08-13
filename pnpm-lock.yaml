@@ -37,6 +37,18 @@ importers:
         specifier: ^6.3.0
         version: 6.4.3(@types/node@22.20.1)(tsx@4.23.12)
 
+  apps/cli:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   apps/control-plane:
     dependencies:
       fastify:

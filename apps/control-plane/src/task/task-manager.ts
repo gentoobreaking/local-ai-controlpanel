@@ -20,7 +20,7 @@ const TERMINAL_STATUSES: ReadonlySet<TaskStatus> = new Set([
 ]);
 
 export class TaskManager {
-  constructor(private readonly db: Db) {}
+  constructor(public readonly db: Db) {}
 
   private nextTaskSeq(): number {
     const row = this.db
