@@ -15,3 +15,10 @@ src-tauri/icons/
 # 環境
 .env
 .env.local
+
+# Control Plane 執行資料（SQLite）
+.acp-data/
+apps/control-plane/.acp-data/
+*.db
+*.db-shm
+*.db-wal
