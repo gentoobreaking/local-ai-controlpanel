@@ -64,6 +64,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T018 | Evidence model + Bundle + Shaping（§13/§12.2/§27/§30） | ✅ done |
 | T019 | Evidence Gate：兩階段評估 + 降級政策 + 卡死防護（§14） | ✅ done |
 | T020 | Reflection + Retry：失敗分類器 + 重試政策（§22/§23） | ✅ done |
+| T021 | Worker Interface + Pi Worker + llama.cpp 串接（§15/§16） | ✅ done |
+| T022 | Worker Registry / Router：註冊與選派（§17） | ✅ done |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
