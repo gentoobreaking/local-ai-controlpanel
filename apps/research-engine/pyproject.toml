@@ -1,0 +1,21 @@
+# Research Engine（spec §12）：Python 3.12+ + FastAPI service。
+# 生產時 use FastAPI + httpx + beautifulsoup4 + trafilatura + pydantic（§459）；
+# 核心邏輯與單元測試僅依賴標準庫，確保可於無額外套件環境執行。
+[project]
+name = "acp-research-engine"
+version = "0.5.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.110",        # HTTP API（§12.4）
+  "uvicorn[standard]>=0.29",
+  "httpx>=0.27",           # Web / Documentation Retriever
+  "beautifulsoup4>=4.12",  # HTML extract
+  "trafilatura>=0.5",      # 本文斷章
+  "pydantic>=2.6",         # Evidence Model 序列化
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
