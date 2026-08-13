@@ -4,6 +4,7 @@
 import type { Sandbox } from "./types.js";
 import { createStubSandbox } from "./adapters.js";
 import { createSeatbeltSandbox } from "./seatbelt.js";
+import { createBwrapSandbox } from "./bwrap.js";
 
 export class SandboxRegistry {
   private factories = new Map<string, () => Sandbox>();
@@ -37,7 +38,7 @@ export interface DefaultRegistryConfig {
 /** 預設註冊四種後端（§21.1；bwrap/shuru 實作於 T014/T015） */
 export function createDefaultRegistry(config: DefaultRegistryConfig = {}): SandboxRegistry {
   const registry = new SandboxRegistry();
-  registry.register("bwrap", () => createStubSandbox("bwrap"));
+  registry.register("bwrap", () => createBwrapSandbox());
   registry.register("seatbelt", () =>
     config.seatbeltProfile
       ? createSeatbeltSandbox(config.seatbeltProfile)
