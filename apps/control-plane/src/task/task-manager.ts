@@ -198,6 +198,40 @@ export class TaskManager {
     return Number(row.c);
   }
 
+  /** §27 reflections 表：記錄每次失敗分類（供 §36.2 交叉驗證 error-signature × knowledge_error）。 */
+  recordReflection(
+    id: string,
+    attempt: number,
+    classification: string,
+    confidence: number | null,
+    recommendedAction: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO reflections (id, task_id, attempt, classification, confidence, recommended_action, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), id, attempt, classification, confidence, recommendedAction, new Date().toISOString());
+  }
+
+  /** §27：查 task 最近一次 reflection。 */
+  lastReflection(id: string): { classification: string; confidence: number | null; recommendedAction: string } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT classification, confidence, recommended_action
+         FROM reflections WHERE task_id = ? ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(id) as
+      | { classification: string; confidence: number | null; recommended_action: string }
+      | undefined;
+    if (!row) return undefined;
+    return {
+      classification: row.classification,
+      confidence: row.confidence,
+      recommendedAction: row.recommended_action,
+    };
+  }
+
   evidenceCount(id: string): { count: number; confidence: number | null } {
     const row = this.db
       .prepare(
