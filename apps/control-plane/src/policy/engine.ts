@@ -178,6 +178,21 @@ export class PolicyEngine {
     return this.policies.defaultPolicy.retry?.max_attempts ?? 3;
   }
 
+  /** §20 artifact.allowed：worker 可修改的檔案 glob（T021 executionPolicy.allowedFiles）。 */
+  allowedFiles(): string[] {
+    return this.policies.defaultPolicy.artifact?.allowed ?? [];
+  }
+
+  /** §20 artifact.readonly：worker 唯讀檔案 glob。 */
+  readonlyFiles(): string[] {
+    return this.policies.defaultPolicy.artifact?.readonly ?? [];
+  }
+
+  /** §21 verification.required：驗證指令（對應 verifier 名稱）。 */
+  verificationCommands(): string[] {
+    return this.policies.defaultPolicy.verification?.required ?? [];
+  }
+
   /**
    * §23 retry.on 表：依 failure class 給動作（規範化 repair → repair_environment）。
    * policy 未定義該 class 時回 undefined（由 reflection engine 用預設映射）。

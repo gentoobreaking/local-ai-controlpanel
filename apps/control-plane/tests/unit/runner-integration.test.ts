@@ -11,6 +11,8 @@ import { createTaskBus } from "../../src/events/bus.js";
 import { loadPolicies } from "../../src/policy/loader.js";
 import { PolicyEngine } from "../../src/policy/engine.js";
 import { createRunner, type TaskRunner } from "../../src/runner.js";
+import { WorkerRegistry } from "../../src/worker/registry.js";
+import { PiWorker } from "../../src/worker/pi-worker.js";
 
 const policiesDir = new URL("../../../../policies", import.meta.url).pathname;
 
@@ -30,6 +32,38 @@ test("start：policy 要求研究 → RESEARCH_REQUIRED → RESEARCHING", () => 
   const { tm, runner, task } = setup();
   runner.start(task.id);
   assert.equal(tm.getRow(task.id)!.status, "RESEARCHING");
+});
+
+test("T021：有 registry 時 IMPLEMENTING → PiWorker stub → ARTIFACT_VALIDATION（Task→Worker→Patch 閉環）", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "acp-runner-w-"));
+  const db = createDb(dir);
+  const tm = new TaskManager(db);
+  const bus = createTaskBus();
+  const engine = new PolicyEngine(loadPolicies(policiesDir));
+  const registry = new WorkerRegistry();
+  registry.register(
+    {
+      id: "pi-local",
+      runtime: "pi",
+      capabilities: ["coding", "testing"],
+      models: ["qwen-9b"],
+      locality: "local",
+      costClass: "free",
+      supportsACP: true,
+      supportsMCP: true,
+      enabled: true,
+    },
+    // 短 ping 超時：llama.cpp 不存在時快速落入 stub 路徑
+    new PiWorker({ pingTimeoutMs: 200 }),
+  );
+  const runner = createRunner(tm, bus, engine, { workerRegistry: registry });
+  const task = tm.create({ userRequest: "implement feature X" });
+  runner.start(task.id);
+  assert.equal(tm.getRow(task.id)!.status, "RESEARCHING");
+  // 研究完成 → gate PASS → PLANNING → WORKER_SELECTION → IMPLEMENTING → worker stub 產出 patch
+  runner.reportResearch(task.id, { facts: 3, sourcesCount: 2, officialSources: 1 }, "COMPLETE");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(tm.getRow(task.id)!.status, "ARTIFACT_VALIDATION");
 });
 
 test("reportResearch PASS → EVIDENCE_VALIDATION → PLANNING → IMPLEMENTING", () => {

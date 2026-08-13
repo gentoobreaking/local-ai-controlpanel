@@ -1,8 +1,9 @@
-// Task Runner（T008 stub → T010 Policy → T017/T018/T019/T020 接入）。
+// Task Runner（T008 stub → T010 Policy → T017/T018/T019/T020 接入 → T021 Worker）。
 // 以 state machine 驅動 task：POLICY_CHECK 以 §10 Knowledge Policy 決定
 // 是否需要研究；RESEARCH_REQUIRED 等待 Research Engine（HTTP，T017）；
 // EVIDENCE_VALIDATION 由 Evidence Gate（T019）四分支決策；
-// REFLECTION（T020）分類失敗 → retry/research/ask_user/stop。
+// REFLECTION（T020）分類失敗 → retry/research/ask_user/stop；
+// IMPLEMENTING（T021）經 Worker Interface 選派 Pi Worker 產出 patch。
 // emit SSE stage 事件、支援 cancel / approve。
 
 import { createStateMachine } from "./state/state-machine.js";
@@ -14,6 +15,10 @@ import { classify, canRetry } from "./reflection/engine.js";
 import type { EvidenceDecision } from "./evidence/gate.js";
 import { validateEvidenceGate } from "./evidence/gate.js";
 import type { ResearchSummary } from "./policy/types.js";
+import type { WorkerRegistry } from "./worker/registry.js";
+import { WorkerRouter } from "./worker/registry.js";
+import type { WorkerRequest, WorkerResult } from "./worker/types.js";
+import { PiWorker } from "./worker/pi-worker.js";
 
 export interface TaskRunner {
   start(taskId: string): void;
@@ -25,15 +30,25 @@ export interface TaskRunner {
   reportVerificationFailure(taskId: string, output: string): void;
   /** 目前進行的階段（供 SSE 重連 replay 快照）。 */
   getStage(taskId: string): { stage: TaskStatus; attempt: number } | undefined;
+  /** T021：回報 worker 執行結果（產出 patch）。 */
+  reportWorkerResult(taskId: string, result: WorkerResult): void;
 }
 
 export function createRunner(
   taskManager: TaskManager,
   bus: TaskBus,
   policyEngine: PolicyEngine,
+  deps: { workerRegistry?: WorkerRegistry } = {},
 ): TaskRunner {
   const runningStages = new Map<string, { stage: TaskStatus; attempt: number }>();
   const researchState = new Map<string, { retries: number; task: TaskRow }>();
+  const workerState = new Map<string, { request: WorkerRequest; attempt: number }>();
+  const workerRegistry = deps.workerRegistry;
+  const router = workerRegistry ? new WorkerRouter(workerRegistry) : null;
+  // Worker 初始化 context：llama.cpp baseUrl 由環境變數設定（§16 設定化）
+  const llmBaseUrl = process.env.LLAMA_BASE_URL ?? "http://127.0.0.1:8080";
+  const llmModel = process.env.LLAMA_MODEL ?? "qwen-9b";
+  const initializedWorkers = new Set<string>();
   const emit = (taskId: string, e: StageEvent) => bus.emit(taskId, e);
 
   const emitStage = (taskId: string, task: TaskRow) => {
@@ -85,6 +100,7 @@ export function createRunner(
         step(task, "PLANNING");
         step(task, "WORKER_SELECTION");
         step(task, "IMPLEMENTING");
+        void runWorker(taskManager.getRow(task.id)!);
         break;
       case "RESEARCH_AGAIN": {
         const nextRetries = retries + 1;
@@ -104,6 +120,7 @@ export function createRunner(
         step(task, "PLANNING");
         step(task, "WORKER_SELECTION");
         step(task, "IMPLEMENTING");
+        void runWorker(taskManager.getRow(task.id)!);
         break;
       }
       case "BLOCK":
@@ -136,6 +153,7 @@ export function createRunner(
         if (canRetry(task.attempt - 1, policyEngine.retryMaxAttempts())) {
           taskManager.setAttempt(task.id, task.attempt + 1);
           step(task, "IMPLEMENTING");
+          void runWorker(taskManager.getRow(task.id)!);
         } else {
           step(task, "STOP");
         }
@@ -199,6 +217,7 @@ export function createRunner(
             step(task, "PLANNING");
             step(task, "WORKER_SELECTION");
             step(task, "IMPLEMENTING");
+            runWorker(taskManager.getRow(task.id)!);
           } else {
             // 研究需求確定 → 立即啟動 research（進入 RESEARCHING 等待 reportResearch）
             researchState.set(task.id, { retries: 0, task });
@@ -210,6 +229,99 @@ export function createRunner(
       default:
         // 已停在中途狀態（重啟/重連）或終態：不做任何事。
         break;
+    }
+  }
+
+  /**
+   * T021：IMPLEMENTING → Worker Interface 選派 Pi Worker → execute → patch。
+   * llama.cpp 未啟動時 PiWorker 自動走 stub 快速路徑（§16 備註），
+   * 讓 `Task → Worker → Patch` 最小 pipeline 可測。
+   */
+  async function runWorker(task: TaskRow): Promise<void> {
+    if (!router || !workerRegistry) return;
+    try {
+      const strategy = policyEngine.evaluateExecution();
+      const { worker, descriptor } = router.select(task, strategy);
+      // lazy initialize（PiWorker 探測 llama.cpp；同一 worker 只 init 一次）
+      if (!initializedWorkers.has(descriptor.id)) {
+        await worker.initialize({
+          baseUrl: llmBaseUrl,
+          model: strategy.model ?? llmModel,
+          workspaceRoot: task.workspace ?? process.cwd(),
+        });
+        initializedWorkers.add(descriptor.id);
+      }
+
+      const request: WorkerRequest = {
+        task,
+        evidence: {
+          taskId: task.id,
+          facts: [],
+          constraints: [],
+          versions: [],
+          unresolvedQuestions: [],
+          truncated: false,
+          droppedFactIds: [],
+          estimatedTokens: 0,
+        },
+        plan: { id: `plan-${task.id}`, steps: [{ id: "s1", description: task.request.slice(0, 120) }] },
+        executionPolicy: {
+          strategy: strategy.strategy,
+          tier: strategy.tier,
+          worker: descriptor.id,
+          model: strategy.model,
+          allowCloud: strategy.allowCloud,
+          maxAttempts: strategy.maxAttempts,
+          allowedFiles: policyEngine.allowedFiles(),
+          readonlyFiles: policyEngine.readonlyFiles(),
+          verification: policyEngine.verificationCommands(),
+        },
+        workspace: {
+          path: task.workspace ?? process.cwd(),
+          languages: [],
+          frameworks: [],
+        },
+      };
+      workerState.set(task.id, { request, attempt: task.attempt });
+      const result = await worker.execute(request);
+      reportWorkerResult(task.id, result);
+    } catch (err) {
+      const e = err as Error;
+      reportWorkerResult(task.id, {
+        ok: false,
+        changedFiles: [],
+        summary: `worker error: ${e.message}`,
+        errorClassification: "tool_error",
+        output: e.message,
+        durationMs: 0,
+      });
+    }
+  }
+
+  /** T021：worker 執行完成 → patch 記錄 → ARTIFACT_VALIDATION / REFLECTION。 */
+  function reportWorkerResult(taskId: string, result: WorkerResult): void {
+    const task = taskManager.getRow(taskId);
+    if (!task || task.status !== "IMPLEMENTING") return;
+    const ws = workerState.get(taskId);
+    if (result.ok) {
+      // patch 記錄到 attempts（供 artifact 層套用）
+      taskManager.recordAttempt(
+        taskId,
+        task.attempt,
+        ws?.request.executionPolicy.worker ?? "pi-local",
+        ws?.request.executionPolicy.model ?? "qwen-9b",
+      );
+      step(task, "ARTIFACT_VALIDATION");
+    } else {
+      // 失敗 → REFLECTION（T020 分類 → retry / research / ask_user / stop）
+      taskManager.recordAttempt(
+        taskId,
+        task.attempt,
+        ws?.request.executionPolicy.worker ?? "pi-local",
+        ws?.request.executionPolicy.model ?? "qwen-9b",
+      );
+      step(task, "REFLECTION");
+      runReflection(task, result.output ?? result.summary);
     }
   }
 
@@ -244,6 +356,9 @@ export function createRunner(
       if (!task || task.status !== "VERIFYING") return;
       step(task, "REFLECTION");
       runReflection(task, output);
+    },
+    reportWorkerResult(taskId, result) {
+      reportWorkerResult(taskId, result);
     },
     getStage(taskId: string) {
       return runningStages.get(taskId);

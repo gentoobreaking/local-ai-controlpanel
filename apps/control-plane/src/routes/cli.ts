@@ -10,27 +10,26 @@ import type { TaskManager } from "../task/task-manager.js";
 import type { VerificationEngine } from "../verification/engine.js";
 import { DEFAULT_VERIFIERS } from "../verification/verifiers.js";
 import { buildVerificationContext } from "../verification/context.js";
+import type { WorkerRegistry } from "../worker/registry.js";
 
 export async function createCliRouter(
   app: FastifyInstance,
-  opts: { deps: { taskManager: TaskManager; policies: LoadedPolicies; policyEngine: PolicyEngine; verificationEngine: VerificationEngine } },
+  opts: { deps: { taskManager: TaskManager; policies: LoadedPolicies; policyEngine: PolicyEngine; verificationEngine: VerificationEngine; workerRegistry: WorkerRegistry } },
 ): Promise<void> {
-  const { taskManager, policies, verificationEngine } = opts.deps;
+  const { taskManager, policies, verificationEngine, workerRegistry } = opts.deps;
 
-  // workers list — stub：Phase 1–5 只有 pi-local（T022 接入 WorkerRegistry）
+  // workers list — T022 接入 WorkerRegistry（Phase 1–5 只有 pi-local）
   app.get("/api/v1/workers", async () => ({
-    workers: [
-      {
-        id: "pi-local",
-        runtime: "pi",
-        model: "qwen-9b",
-        tier: "local",
-        locality: "local",
-        costClass: "free",
-        enabled: true,
-      },
-    ],
-    note: "stub — WorkerRegistry 於 T022 接入",
+    workers: workerRegistry.list().map((d) => ({
+      id: d.id,
+      runtime: d.runtime,
+      model: d.models[0] ?? null,
+      tier: d.locality,
+      locality: d.locality,
+      costClass: d.costClass,
+      enabled: d.enabled,
+      capabilities: d.capabilities,
+    })),
   }));
 
   // policy validate — Policy Engine 載入結果（T010 起為真實驗證）

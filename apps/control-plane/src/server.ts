@@ -16,6 +16,7 @@ import { loadPolicies } from "./policy/loader.js";
 import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
 import { VerificationEngine } from "./verification/engine.js";
+import { createDefaultWorkerRegistry, type WorkerRegistry } from "./worker/registry.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -39,6 +40,7 @@ export interface AppDeps {
   policyEngine: PolicyEngine;
   registry: SandboxRegistry;
   verificationEngine: VerificationEngine;
+  workerRegistry: WorkerRegistry;
 }
 
 export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
@@ -48,7 +50,8 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const bus = createTaskBus();
   const policies = loadPolicies(config.policiesDir);
   const policyEngine = new PolicyEngine(policies);
-  const runner = createRunner(taskManager, bus, policyEngine);
+  const workerRegistry = createDefaultWorkerRegistry();
+  const runner = createRunner(taskManager, bus, policyEngine, { workerRegistry });
   const registry = createDefaultRegistry({
     seatbeltProfile: resolveSeatbeltProfile(policies),
   });
@@ -91,12 +94,14 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createEventRouter, { deps: { bus, runner } });
   await app.register(createSandboxRouter, { deps: { registry } });
   await app.register(createStrategyRouter, { deps: { taskManager, policyEngine } });
-  await app.register(createCliRouter, { deps: { taskManager, policies, policyEngine, verificationEngine } });
+  await app.register(createCliRouter, {
+    deps: { taskManager, policies, policyEngine, verificationEngine, workerRegistry },
+  });
 
   app.get("/health", async () => ({ status: "ok" }));
 
   return {
     app,
-    deps: { config, db, taskManager, runner, bus, policies, policyEngine, registry, verificationEngine },
+    deps: { config, db, taskManager, runner, bus, policies, policyEngine, registry, verificationEngine, workerRegistry },
   };
 }
