@@ -56,7 +56,8 @@ pnpm tauri build    # 打包 .app/.dmg
 | T010 | Policy Engine（YAML + zod + Knowledge Policy，§10） | ✅ done |
 | T011 | Artifact Controller（validate/apply/rollback，§20） | ✅ done |
 | T012 | Verification Engine + Sandbox Interface/Registry（§21） | ✅ done |
-| T013+ | Sandbox 實作 / Research / Benchmark… | ⏳ pending |
+| T013 | seatbelt（sandbox-exec）adapter + default-deny profile（§28.1） | ✅ done |
+| T014+ | bwrap / shuru / Research / Benchmark… | ⏳ pending |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 
