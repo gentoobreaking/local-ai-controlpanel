@@ -1,9 +1,12 @@
-// Task Runner（T008 stub 版）。
-// 以 state machine 驅動 task：本階段 pipeline 走到 RESEARCH_REQUIRED 即等待
+// Task Runner（T008 stub，T010 接入 Policy Engine）。
+// 以 state machine 驅動 task：POLICY_CHECK 以 §10 Knowledge Policy 決定
+// 是否需要研究（本階段無 Task Analyzer，保守預設 researchReasons=
+// unknown_dependency → REQUIRE_RESEARCH）；到達 RESEARCH_REQUIRED 即等待
 //（Research Engine 於 T017 實作）；emit SSE stage 事件、支援 cancel。
-// 實作層（Policy/Artifact/Verification/Sandbox）由 T010/T011/T012/T016 接入。
+// 實作層（Artifact/Verification/Sandbox）由 T011/T012/T016 接入。
 
 import { createStateMachine } from "./state/state-machine.js";
+import type { PolicyEngine } from "./policy/engine.js";
 import type { StageEvent, TaskBus } from "./events/bus.js";
 import type { TaskManager } from "./task/task-manager.js";
 import type { TaskRow, TaskStatus } from "./task/types.js";
@@ -19,6 +22,7 @@ export interface TaskRunner {
 export function createRunner(
   taskManager: TaskManager,
   bus: TaskBus,
+  policyEngine: PolicyEngine,
 ): TaskRunner {
   const runningStages = new Map<string, { stage: TaskStatus; attempt: number }>();
   const emit = (taskId: string, e: StageEvent) => bus.emit(taskId, e);
@@ -51,12 +55,32 @@ export function createRunner(
     };
 
     // 最小 pipeline（§38 Phase 1 驗證：Task → Policy → Research 邊界）。
-    // ANALYZING / POLICY_CHECK 之後到達 RESEARCH_REQUIRED 等待 Research Engine。
+    // Task Analyzer 於 T011 後續接入：現階段以保守分析（unknown_dependency）
+    // 餵入 Policy Engine，Knowledge Policy 決定 → RESEARCH_REQUIRED。
     switch (sm.state) {
       case "CREATED":
         step("ANALYZING");
         step("POLICY_CHECK");
-        step("RESEARCH_REQUIRED");
+        {
+          const analysis = {
+            languages: [],
+            frameworks: [],
+            dependencies: [],
+            complexity: "medium" as const,
+            risk: "medium" as const,
+            researchRequired: true,
+            researchReasons: ["unknown_dependency"],
+          };
+          const decision = policyEngine.evaluateTask(analysis);
+          if (decision.action === "ALLOW_PLANNING") {
+            step("PLANNING");
+            step("IMPLEMENTING");
+            step("VERIFYING");
+            step("COMPLETE");
+          } else {
+            step("RESEARCH_REQUIRED");
+          }
+        }
         break;
       default:
         // 已停在中途狀態（重啟/重連）或終態：不做任何事。

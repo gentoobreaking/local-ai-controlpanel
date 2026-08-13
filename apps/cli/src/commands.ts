@@ -142,10 +142,18 @@ async function workersList(client: ApiClient): Promise<CommandResult> {
 
 async function policyValidate(client: ApiClient): Promise<CommandResult> {
   const res = await client.validatePolicy();
-  return {
-    code: 0,
-    lines: [`valid: ${String(res.valid)}`, ...(Array.isArray(res.policies) ? res.policies.map((p) => `  - ${String(p)}`) : [])],
-  };
+  const lines: string[] = [];
+  if (res.valid === undefined) {
+    return { code: 0, lines: [`valid: ${String(res.valid)}`] };
+  }
+  lines.push(`valid: ${String(res.valid)}`);
+  if (Array.isArray(res.policies)) {
+    for (const p of res.policies as { name?: string; valid?: boolean; errors?: string[] }[]) {
+      lines.push(`  - ${String(p.name)}: ${p.valid ? "ok" : "INVALID"}`);
+      for (const e of p.errors ?? []) lines.push(`      ${e}`);
+    }
+  }
+  return { code: 0, lines };
 }
 
 async function verify(client: ApiClient, args: string[]): Promise<CommandResult> {

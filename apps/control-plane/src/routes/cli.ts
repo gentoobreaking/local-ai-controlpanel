@@ -3,13 +3,15 @@
 // T009 提供 stub；T010（policy）、T012/T016（verify）接入實作。
 
 import type { FastifyInstance } from "fastify";
+import type { LoadedPolicies } from "../policy/loader.js";
+import type { PolicyEngine } from "../policy/engine.js";
 import type { TaskManager } from "../task/task-manager.js";
 
 export async function createCliRouter(
   app: FastifyInstance,
-  opts: { deps: { taskManager: TaskManager } },
+  opts: { deps: { taskManager: TaskManager; policies: LoadedPolicies; policyEngine: PolicyEngine } },
 ): Promise<void> {
-  const { taskManager } = opts.deps;
+  const { taskManager, policies } = opts.deps;
 
   // workers list — stub：Phase 1–5 只有 pi-local（T022 接入 WorkerRegistry）
   app.get("/api/v1/workers", async () => ({
@@ -27,11 +29,15 @@ export async function createCliRouter(
     note: "stub — WorkerRegistry 於 T022 接入",
   }));
 
-  // policy validate — stub：T010 載入實際 policies 驗證
+  // policy validate — Policy Engine 載入結果（T010 起為真實驗證）
   app.get("/api/v1/policy/validate", async () => ({
-    valid: true,
-    policies: ["default", "coding", "research", "security", "escalation", "sandbox", "kubernetes"],
-    note: "stub — PolicyEngine 於 T010 接入",
+    valid: policies.report.every((r) => r.valid),
+    dir: policies.dir,
+    policies: policies.report.map((r) => ({
+      name: r.name,
+      valid: r.valid,
+      ...(r.errors.length > 0 ? { errors: r.errors } : {}),
+    })),
   }));
 
   // verify — stub：T012/T016 接入 Verification Engine + Sandbox

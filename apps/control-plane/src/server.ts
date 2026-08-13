@@ -10,6 +10,8 @@ import { createEventRouter } from "./routes/events.js";
 import { createSandboxRouter } from "./routes/sandbox.js";
 import { createStrategyRouter } from "./routes/strategy.js";
 import { createCliRouter } from "./routes/cli.js";
+import { loadPolicies } from "./policy/loader.js";
+import { PolicyEngine } from "./policy/engine.js";
 
 export interface AppDeps {
   config: AppConfig;
@@ -17,14 +19,18 @@ export interface AppDeps {
   runner: ReturnType<typeof createRunner>;
   bus: ReturnType<typeof createTaskBus>;
   db: ReturnType<typeof createDb>;
+  policies: ReturnType<typeof loadPolicies>;
+  policyEngine: PolicyEngine;
 }
 
-export async function buildApp(opts: { config?: AppConfig } = {}) {
-  const config = opts.config ?? loadConfig();
+export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
+  const config: AppConfig = { ...loadConfig(), ...opts.config };
   const db = createDb(config.dataDir);
   const taskManager = createTaskManager(db);
   const bus = createTaskBus();
-  const runner = createRunner(taskManager, bus);
+  const policies = loadPolicies(config.policiesDir);
+  const policyEngine = new PolicyEngine(policies);
+  const runner = createRunner(taskManager, bus, policyEngine);
   const app = Fastify({ logger: false });
 
   // zod 驗證失敗 → 400（而非 500）
@@ -39,10 +45,10 @@ export async function buildApp(opts: { config?: AppConfig } = {}) {
   await app.register(createTaskRouter, { deps: { taskManager, runner } });
   await app.register(createEventRouter, { deps: { bus, runner } });
   await app.register(createSandboxRouter);
-  await app.register(createStrategyRouter, { deps: { taskManager } });
-  await app.register(createCliRouter, { deps: { taskManager } });
+  await app.register(createStrategyRouter, { deps: { taskManager, policyEngine } });
+  await app.register(createCliRouter, { deps: { taskManager, policies, policyEngine } });
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  return { app, deps: { config, db, taskManager, runner, bus } };
+  return { app, deps: { config, db, taskManager, runner, bus, policies, policyEngine } };
 }
