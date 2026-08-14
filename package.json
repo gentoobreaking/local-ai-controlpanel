@@ -12,6 +12,7 @@
     "cp:dev": "pnpm --filter @acp/control-plane dev",
     "cp:build": "pnpm --filter @acp/control-plane build",
     "cp:test": "pnpm --filter @acp/control-plane test",
+    "cp:bundle": "CI=true BUILD_ENV=development NODE_ENV=development pnpm --filter @acp/control-plane build && rm -rf apps/control-plane/dist-bundle /tmp/acp-cp-bundle-deploy && mkdir -p apps/control-plane/dist-bundle /tmp/acp-cp-bundle-deploy && cp apps/control-plane/package.json /tmp/acp-cp-bundle-deploy/package.json && cd /tmp/acp-cp-bundle-deploy && npm install --omit=dev --no-audit --no-fund --silent && cd - && cp -r apps/control-plane/dist apps/control-plane/dist-bundle/dist && rm -rf apps/control-plane/dist-bundle/node_modules && cp -RL /tmp/acp-cp-bundle-deploy/node_modules apps/control-plane/dist-bundle/node_modules && rm -rf /tmp/acp-cp-bundle-deploy && CI=true BUILD_ENV=development pnpm install",
     "acp": "pnpm --filter @acp/cli exec tsx src/main.ts"
   },
   "dependencies": {

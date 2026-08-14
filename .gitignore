@@ -30,3 +30,4 @@ apps/control-plane/.acp-data/
 
 # Artifact Controller 內部 scratch
 **/.acp-cmp/
+apps/control-plane/dist-bundle/

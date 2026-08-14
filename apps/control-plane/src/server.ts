@@ -21,8 +21,11 @@ import { PiWorker } from "./worker/pi-worker.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
-/** §30 verification.sandbox.seatbelt.profile（缺省用 repo sandbox-profiles/verification-default.sb） */
+/** §30 verification.sandbox.seatbelt.profile（缺省用 repo sandbox-profiles/verification-default.sb）
+ *  設定化：CP_SEATBELT_PROFILE env 可直接指定（打包後 resource 路徑由 Rust 端傳入）。 */
 function resolveSeatbeltProfile(policies: ReturnType<typeof loadPolicies>): string {
+  const fromEnv = process.env.CP_SEATBELT_PROFILE;
+  if (fromEnv) return fromEnv;
   const fromPolicy =
     policies.defaultPolicy.sandbox?.seatbelt?.profile ??
     policies.security?.sandbox?.seatbelt?.profile;
