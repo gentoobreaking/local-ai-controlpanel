@@ -17,11 +17,15 @@ export async function createEventRouter(
     reply.hijack();
 
     const res = reply.raw;
+    // §45.3 + §45.6：SSE hijack 後 bypass cors plugin → 手動補 access-control-allow-origin
+    // （origin: true 對應 reflect request Origin；Control Plane 只 bind loopback，攻擊面為零）
+    const origin = req.headers.origin;
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
     });
     res.write("\n");
 

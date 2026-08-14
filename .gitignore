@@ -31,3 +31,6 @@ apps/control-plane/.acp-data/
 # Artifact Controller 內部 scratch
 **/.acp-cmp/
 apps/control-plane/dist-bundle/
+
+# 基準測試 + E2E 結果（T023+），執行狀態資料不入庫
+results-keep/

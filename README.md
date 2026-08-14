@@ -43,6 +43,51 @@ pnpm tauri dev      # Desktop UI（需 Control Plane 於 127.0.0.1:3001）
 pnpm tauri build    # 打包 .app/.dmg
 ```
 
+## macOS 打包（.app / .dmg）
+
+一鍵腳本（推薦）：
+
+```bash
+./scripts/build-macos.sh              # 只打包（cp:bundle + tauri build）
+./scripts/build-macos.sh --install    # 打包 + 安裝到 /Applications + post-install smoke test
+./scripts/build-macos.sh --skip-bundle  # 跳過 CP 打包（只 build 前端+tauri）
+./scripts/build-macos.sh --clean      # 清 target 完整重編譯
+ACP_VERSION=0.6.0 ./scripts/build-macos.sh  # 覆寫版本號（預設讀 tauri.conf.json）
+```
+
+`--install` 含 post-install smoke test（驗證 `GET /api/v1/workers` 回 CORS 標頭 + SSE `/api/v1/tasks/:id/events` 也帶 `access-control-allow-origin`，**這兩個端點的 CORS header 來自不同路徑：fetch 走 cors plugin，SSE 因 `reply.hijack()` 繞過 plugin、要手動補**）；任一失敗 exit 1。
+
+流程：`cp:bundle`（build Control Plane + 組裝 `dist-bundle/` 的 flat node_modules）→ `tauri build`（前端 build + 內嵌 binary + 產出 .app/.dmg）→（可選）`pkill` 舊進程（含 CP 子進程）→ `ditto` 覆蓋到 `/Applications`。
+
+產物：`src-tauri/target/release/bundle/macos/Agent Control Plane.app`、`src-tauri/target/release/bundle/dmg/Agent Control Plane_<ver>_<arch>.dmg`。
+
+### 手動部署 workaround（如果 --install 不可用）
+
+環境自動化腳本可能擋某些寫入動作（例如 host security policy 攔 `rm -rf /Applications/...`）。備用流程：
+
+```bash
+pkill -f "Agent Control Plane.app/Contents/MacOS/acp-desktop" || true
+pkill -f "control-plane/dist/main.js" || true     # 同步殺 CP 子進程，避免 attach 舊 binary
+for _ in $(seq 1 10); do
+  pgrep -f "Agent Control Plane" >/dev/null || break
+  sleep 1
+done
+rsync -a --delete \
+  src-tauri/target/release/bundle/macos/Agent\ Control\ Plane.app/ \
+  /Applications/Agent\ Control\ Plane.app/
+open /Applications/Agent\ Control\ Plane.app
+```
+
+`rsync --delete` 會把 metadata 一起鏡像（可能影響 quarantine）；`ditto` 是更乾淨的選擇，但若環境拒絕 `rm -rf`，rsync 是無需刪除舊目錄的等效部署。
+
+### 注意事項（踩坑記錄）
+- 用 `./node_modules/.bin/tauri build`（非 `pnpm tauri build`），避免 pnpm 執行前自動 install prune devDeps 導致 `tauri: not found`。
+- 環境若有 `BUILD_ENV=production`，pnpm 會跳過 devDeps（tsc/tauri 消失）→ 前置 `BUILD_ENV=development NODE_ENV=development`。
+- 打包的 Control Plane 用 `npm install --omit=dev` 產 flat node_modules（無 symlink），避免 tauri bundler 拷貝 pnpm `.pnpm` store symlink 後斷鏈。
+- Tauri 2 的 release build 把前端 assets 編譯期內嵌進 Rust binary（`tauri::generate_context!`），Resources 裡沒有 `index.html` 是正常的；驗證用 `strings <binary> | grep index-*.js`。
+- 打包的 app 啟動時 Rust spawn `node <resource_dir>/control-plane/dist/main.js`；若 127.0.0.1:3001 已有 CP 則 attach 不重複 spawn。env 設定化：`ACP_CP_PORT` / `ACP_CP_NODE` / `ACP_CP_PATH` / `ACP_CP_AUTOSTART` / `ACP_CP_DATA_DIR`。
+- **CORS 雙路徑陷阱**：`@fastify/cors` 只 hook Fastify 標準 reply 鏈；`src/routes/events.ts` 的 SSE 用 `reply.hijack()` + `res.writeHead(...)`，**完全繞過 cors plugin**，必須手動在 `writeHead` 補 `Access-Control-Allow-Origin: <req Origin>` + `Vary: Origin`。下次若 SSE 又卡「reconnecting」但 fetch 正常，先 curl 這個端點驗 header。
+
 ## Pi Worker 模型接入
 
 Pi Worker（`apps/control-plane/src/worker/`）透過 OpenAI-compatible endpoint 串接本地推理引擎，預設 **llama.cpp**（spec §16 原始設計）。連不到時自動降級 stub 快速路徑（§16 備註），`allowStub=false` 可強制真實模型。

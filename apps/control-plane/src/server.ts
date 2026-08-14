@@ -1,4 +1,5 @@
 import Fastify, { type FastifyError } from "fastify";
+import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ZodError } from "zod";
@@ -89,6 +90,12 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     },
   });
   const app = Fastify({ logger: false });
+
+  // §45.3 + §45.6：CORS — Tauri 2 webview 在 macOS 上以 `tauri://localhost` 載入前端，
+  // fetch `http://127.0.0.1:<port>/api/...` 會被 WebKit 的 NetworkLoadChecker 視為 cross-origin
+  // 並回 `validateResponse error / isAccessControl=1`。Control Plane 只 bind 127.0.0.1（loopback）
+  // 且不接受任何非本機連線，因此 `origin: true`（reflect request Origin）等同「本機白名單」。
+  await app.register(cors, { origin: true });
 
   // zod 驗證失敗 → 400（而非 500）
   app.setErrorHandler((err, _req, reply) => {

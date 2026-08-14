@@ -7,6 +7,18 @@ const DEFAULT_PORT = 3001;
 export const cpBaseUrl =
   import.meta.env.VITE_CP_URL ?? `http://127.0.0.1:${import.meta.env.VITE_CP_PORT ?? DEFAULT_PORT}`;
 
+// 診斷：fetch 失敗時輸出詳細錯誤（ACP_DEBUG=1 環境變數無法直達前端，改用 URL query 或 localStorage）
+const debugFetch: typeof fetch = (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  return fetch(input, init).catch((err) => {
+    console.error(`[app:fetch-fail] ${url}`, err?.message ?? String(err));
+    throw err;
+  });
+};
+
+// 每次 fetch 都走 debugFetch，錯誤會進 console（WKWebView 寫入系統 log）
+const f = debugFetch;
+
 export interface TaskSummary {
   id: string;
   userRequest: string;
@@ -55,13 +67,13 @@ export type StageEvent =
   | { type: "done"; status: string; ts: string };
 
 export async function listTasks(): Promise<TaskSummary[]> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks`);
+  const res = await f(`${cpBaseUrl}/api/v1/tasks`);
   if (!res.ok) throw new Error(`listTasks ${res.status}`);
   return res.json();
 }
 
 export async function getTask(id: string): Promise<TaskDetail> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks/${id}`);
+  const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}`);
   if (!res.ok) throw new Error(`getTask ${res.status}`);
   return res.json();
 }
@@ -70,7 +82,7 @@ export async function createTask(
   userRequest: string,
   sandboxMode?: string,
 ): Promise<TaskDetail> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks`, {
+  const res = await f(`${cpBaseUrl}/api/v1/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userRequest, sandboxMode }),
@@ -80,7 +92,7 @@ export async function createTask(
 }
 
 export async function cancelTask(id: string): Promise<void> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks/${id}/cancel`, {
+  const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/cancel`, {
     method: "POST",
   });
   if (!res.ok) throw new Error(`cancelTask ${res.status}`);
@@ -100,12 +112,31 @@ export interface VerifyResult {
   }>;
 }
 
+export interface WorkerInfo {
+  id: string;
+  runtime: string;
+  model: string | null;
+  tier: string;
+  locality: string;
+  costClass: string;
+  enabled: boolean;
+  capabilities: string[];
+}
+
+/** GET /api/v1/workers（§45.5）— worker registry；TopBar 用於顯示實際 worker/model */
+export async function listWorkers(): Promise<WorkerInfo[]> {
+  const res = await f(`${cpBaseUrl}/api/v1/workers`);
+  if (!res.ok) throw new Error(`listWorkers ${res.status}`);
+  const data = (await res.json()) as { workers: WorkerInfo[] };
+  return data.workers;
+}
+
 /** POST /api/v1/tasks/:id/verify（§45.5）— 立即驗證（可選 sandbox mode） */
 export async function verifyTask(
   id: string,
   opts: { sandboxMode?: string } = {},
 ): Promise<VerifyResult> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks/${id}/verify`, {
+  const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
@@ -122,7 +153,7 @@ export interface StrategyResult {
 
 /** GET /api/v1/strategy/:id（§24）— 策略查詢 */
 export async function getStrategy(id: string): Promise<StrategyResult> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/strategy/${id}`);
+  const res = await f(`${cpBaseUrl}/api/v1/strategy/${id}`);
   if (!res.ok) throw new Error(`getStrategy ${res.status}`);
   return res.json();
 }
@@ -136,7 +167,7 @@ export interface LogsResult {
 
 /** GET /api/v1/tasks/:id/logs（§29）— 嘗試/驗證/反思記錄 */
 export async function getTaskLogs(id: string): Promise<LogsResult> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks/${id}/logs`);
+  const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/logs`);
   if (!res.ok) throw new Error(`getTaskLogs ${res.status}`);
   return res.json();
 }
@@ -144,7 +175,7 @@ export async function getTaskLogs(id: string): Promise<LogsResult> {
 export type SandboxStatus = Record<string, boolean>;
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/sandbox`);
+  const res = await f(`${cpBaseUrl}/api/v1/sandbox`);
   if (!res.ok) throw new Error(`getSandboxStatus ${res.status}`);
   return res.json();
 }
@@ -163,7 +194,7 @@ export async function approveTask(
   id: string,
   opts: { kind?: string; actor?: string; reason?: string } = {},
 ): Promise<ApproveResult> {
-  const res = await fetch(`${cpBaseUrl}/api/v1/tasks/${id}/approve`, {
+  const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
