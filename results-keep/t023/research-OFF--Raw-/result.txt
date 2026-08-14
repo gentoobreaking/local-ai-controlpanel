@@ -16,72 +16,72 @@
     {
       "type": "stage",
       "stage": "ANALYZING",
-      "ts": "2026-08-14T14:37:33.262Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "stage",
       "stage": "POLICY_CHECK",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCH_REQUIRED",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCHING",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "stage",
       "stage": "EVIDENCE_VALIDATION",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "evidence",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.810Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCHING",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "reflection",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "stage",
       "stage": "EVIDENCE_VALIDATION",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "evidence",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCHING",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "reflection",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "stage",
       "stage": "EVIDENCE_VALIDATION",
-      "ts": "2026-08-14T14:37:33.263Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "evidence",
-      "ts": "2026-08-14T14:37:33.264Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     },
     {
       "type": "stage",
       "stage": "ASK_USER",
-      "ts": "2026-08-14T14:37:33.264Z"
+      "ts": "2026-08-14T15:30:06.811Z"
     }
   ],
   "error": "research OFF（Raw 對照）：§14.2 on_failed=ask_user → 停在 ASK_USER（知識缺口）"

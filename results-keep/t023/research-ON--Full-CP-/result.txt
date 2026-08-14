@@ -2,7 +2,7 @@
   "label": "research-ON (Full CP)",
   "research": true,
   "success": true,
-  "attempts": 2,
+  "attempts": 1,
   "evidenceCount": 3,
   "finalStatus": "COMPLETE",
   "stages": [
@@ -27,47 +27,47 @@
     {
       "type": "stage",
       "stage": "ANALYZING",
-      "ts": "2026-08-14T14:35:55.518Z"
+      "ts": "2026-08-14T15:29:22.880Z"
     },
     {
       "type": "stage",
       "stage": "POLICY_CHECK",
-      "ts": "2026-08-14T14:35:55.518Z"
+      "ts": "2026-08-14T15:29:22.881Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCH_REQUIRED",
-      "ts": "2026-08-14T14:35:55.518Z"
+      "ts": "2026-08-14T15:29:22.881Z"
     },
     {
       "type": "stage",
       "stage": "RESEARCHING",
-      "ts": "2026-08-14T14:35:55.518Z"
+      "ts": "2026-08-14T15:29:22.881Z"
     },
     {
       "type": "stage",
       "stage": "EVIDENCE_VALIDATION",
-      "ts": "2026-08-14T14:35:55.519Z"
+      "ts": "2026-08-14T15:29:22.882Z"
     },
     {
       "type": "evidence",
-      "ts": "2026-08-14T14:35:55.519Z"
+      "ts": "2026-08-14T15:29:22.882Z"
     },
     {
       "type": "stage",
       "stage": "PLANNING",
-      "ts": "2026-08-14T14:35:55.519Z"
+      "ts": "2026-08-14T15:29:22.882Z"
     },
     {
       "type": "stage",
       "stage": "WORKER_SELECTION",
-      "ts": "2026-08-14T14:35:55.519Z"
+      "ts": "2026-08-14T15:29:22.883Z"
     },
     {
       "type": "stage",
       "stage": "IMPLEMENTING",
-      "ts": "2026-08-14T14:35:55.519Z"
+      "ts": "2026-08-14T15:29:22.883Z"
     }
   ],
-  "patchDiff": "diff --git a/src/api_client.py b/src/api_client.py\n\n--- a/src/api_client.py\n+++ b/src/api_client.py\n@@ -5,7 +5,9 @@ import requests\n Task: implement `get_status_code(url)` that performs a GET request and\n returns the HTTP status code. The current `requests` API must be researched\n (e.g. `requests.get()` returns a `Response` object with `.status_code`).\n+\"\"\"\n \n def get_status_code(url):\n     response = requests.get(url)\n     return response.status_code\n+\n"
+  "patchDiff": "diff --git a/src/api_client.py b/src/api_client.py\n\n--- a/src/api_client.py\n+++ b/src/api_client.py\n@@ -4,3 +4,10 @@ Task: implement `get_status_code(url)` that performs a GET request and\n returns the HTTP status code. The current `requests` API must be researched\n (e.g. `requests.get()` returns a `Response` object with `.status_code`).\n \"\"\"\n+\n+import requests\n+\n+def get_status_code(url):\n+    response = requests.get(url)\n+    return response.status_code\n+\n"
 }
