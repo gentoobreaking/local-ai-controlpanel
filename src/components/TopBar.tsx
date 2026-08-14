@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSandboxStatus } from "../api/client";
+import { getSandboxStatus, type TaskSummary } from "../api/client";
 
 const STATUS_COLOR: Record<string, string> = {
   bwrap: "badge badge-ok",
@@ -8,16 +8,23 @@ const STATUS_COLOR: Record<string, string> = {
   docker: "badge badge-dim",
 };
 
-export default function TopBar() {
+interface Props {
+  selectedTask: TaskSummary | null;
+  sandboxStatus?: Record<string, boolean>;
+}
+
+export default function TopBar({ selectedTask, sandboxStatus }: Props) {
   const [sandbox, setSandbox] = useState<Record<string, boolean>>({});
 
+  // 首次掛載時探測（非 task 綁定的全域狀態）
   useEffect(() => {
     getSandboxStatus().then(setSandbox).catch(() => setSandbox({}));
   }, []);
 
-  const active = Object.entries(sandbox)
-    .filter(([, ok]) => ok)
-    .map(([name]) => name);
+  const backendStatus = sandboxStatus ?? sandbox;
+
+  // §45.4：TopBar 顯示目前 task 的 sandbox mode badge
+  const taskSandbox = selectedTask?.sandboxMode;
 
   return (
     <header className="topbar">
@@ -25,11 +32,19 @@ export default function TopBar() {
       <span className="topbar-sep">·</span>
       <span className="topbar-meta">worker: pi-local</span>
       <span className="topbar-meta">model: qwen-9b</span>
-      {active.map((name) => (
-        <span key={name} className={STATUS_COLOR[name] ?? "badge badge-dim"}>
-          sandbox: {name}
+      {taskSandbox && (
+        <span className={STATUS_COLOR[taskSandbox] ?? "badge badge-dim"}>
+          sandbox: {taskSandbox}
         </span>
-      ))}
+      )}
+      {!taskSandbox &&
+        Object.entries(backendStatus)
+          .filter(([, ok]) => ok)
+          .map(([name]) => (
+            <span key={name} className={STATUS_COLOR[name] ?? "badge badge-dim"}>
+              sandbox: {name}
+            </span>
+          ))}
     </header>
   );
 }

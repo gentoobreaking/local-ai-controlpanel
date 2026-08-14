@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TaskSummary } from "../api/client";
 import type { Command } from "../App";
 
@@ -17,6 +17,8 @@ interface Entry {
 
 export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
   const [query, setQuery] = useState("");
+  const [cursor, setCursor] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const entries = useMemo<Entry[]>(() => {
     const base: Entry[] = [
@@ -35,6 +37,15 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
     return q ? base.filter((e) => e.label.toLowerCase().includes(q)) : base;
   }, [query, tasks]);
 
+  // 方向鍵歷史：游標移動（§45.4）
+  useEffect(() => {
+    setCursor(0);
+  }, [query, entries.length]);
+
+  useEffect(() => {
+    listRef.current?.querySelector(".palette-item-active")?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -42,6 +53,10 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const run = (entry: Entry) => {
+    onCommand(entry.command);
+  };
 
   return (
     <div className="palette-overlay" onClick={onClose}>
@@ -53,12 +68,25 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && entries[0]) onCommand(entries[0].command);
+            if (e.key === "Enter" && entries[0]) {
+              run(entries[cursor] ?? entries[0]!);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setCursor((c) => Math.min(c + 1, entries.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setCursor((c) => Math.max(c - 1, 0));
+            }
           }}
         />
-        <ul className="palette-list">
-          {entries.map((e) => (
-            <li key={e.id} className="palette-item" onClick={() => onCommand(e.command)}>
+        <ul className="palette-list" ref={listRef}>
+          {entries.map((e, i) => (
+            <li
+              key={e.id}
+              className={`palette-item ${i === cursor ? "palette-item-active" : ""}`}
+              onClick={() => run(e)}
+              onMouseEnter={() => setCursor(i)}
+            >
               <span className="palette-label">{e.label}</span>
               {e.hint ? <span className="palette-hint">{e.hint}</span> : null}
             </li>

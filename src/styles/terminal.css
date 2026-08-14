@@ -328,6 +328,10 @@ body {
   background: var(--bg-active);
 }
 
+.palette-item-active {
+  background: var(--bg-active);
+}
+
 .palette-label {
   color: var(--accent-blue);
 }
@@ -342,4 +346,107 @@ body {
 .palette-empty {
   padding: 12px;
   color: var(--fg-dim);
+}
+
+/* ── SandboxCheckPanel ──────────────────────────────── */
+
+.sb-title {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.sb-ok {
+  color: var(--accent);
+}
+
+.sb-bad {
+  color: var(--danger);
+}
+
+.sb-footer {
+  padding: 6px 12px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── ApproveDialog ──────────────────────────────────── */
+
+.approve-dialog {
+  max-height: none;
+}
+
+.approve-task {
+  padding: 10px 12px;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+  word-break: break-word;
+}
+
+.approve-status {
+  padding: 6px 12px;
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.approve-kinds {
+  list-style: none;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approve-kinds label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.approve-reason {
+  margin: 4px 12px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.approve-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.btn {
+  padding: 5px 14px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--fg-dim);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  border-color: var(--accent);
+  opacity: 0.9;
 }
