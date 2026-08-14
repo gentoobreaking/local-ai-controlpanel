@@ -72,6 +72,8 @@ export interface WorkerRequest {
   plan: WorkerPlan;
   executionPolicy: WorkerExecutionPolicy;
   workspace: WorkerWorkspaceContext;
+  /** T021 §16：上一輪驗證失敗的輸出（重試時回饋給 worker；首次執行為 undefined）。 */
+  previousFeedback?: string;
 }
 
 /** WorkerResult — execute 的產出（patch + 摘要）。 */

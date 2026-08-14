@@ -1,0 +1,13 @@
+[project]
+name = "external-lib-demo"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.28"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+# §16 verification：lint 只抓真實錯誤（E9/F），不含風格規則（style 由評測統計處理）
+[tool.ruff]
+line-length = 100
+select = ["E9", "F"]

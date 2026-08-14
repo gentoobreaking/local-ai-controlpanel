@@ -66,18 +66,27 @@ export class LlamaClient {
   async ping(): Promise<{ ok: boolean; latencyMs: number; detail?: string }> {
     const started = Date.now();
     const signal = AbortSignal.timeout(this.pingTimeoutMs);
-    try {
-      const res = await fetch(`${this.baseUrl}/health`, { signal });
-      const detail = (await res.text()).slice(0, 200);
-      return { ok: res.ok, latencyMs: Date.now() - started, detail };
-    } catch {
-      // llama-server 無 /health 時退回根路徑
+    const tryHealth = async () => {
       try {
-        const res = await fetch(`${this.baseUrl}/`, { signal });
-        return { ok: res.ok, latencyMs: Date.now() - started };
-      } catch {
-        return { ok: false, latencyMs: Date.now() - started };
+        const res = await fetch(`${this.baseUrl}/health`, { signal });
+        return { ok: res.ok, status: res.status, detail: await res.text() };
+      } catch (err) {
+        const e = err as Error;
+        if (e.name === "AbortError") return { ok: false, status: 0, detail: "timeout" };
+        // 網路層失敗 → 跳到根路徑
+        return { ok: false, status: 0, detail: "fetch-error" };
       }
+    };
+    const health = await tryHealth();
+    if (health.ok) {
+      return { ok: true, latencyMs: Date.now() - started, detail: health.detail.slice(0, 200) };
+    }
+    // /health 不存在（如 ollama 回 404）或未達 → 退回根路徑判斷可達性（§README）
+    try {
+      const res = await fetch(`${this.baseUrl}/`, { signal });
+      return { ok: res.ok, latencyMs: Date.now() - started };
+    } catch {
+      return { ok: false, latencyMs: Date.now() - started };
     }
   }
 

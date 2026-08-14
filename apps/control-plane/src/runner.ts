@@ -43,6 +43,8 @@ export function createRunner(
   const runningStages = new Map<string, { stage: TaskStatus; attempt: number }>();
   const researchState = new Map<string, { retries: number; task: TaskRow }>();
   const workerState = new Map<string, { request: WorkerRequest; attempt: number }>();
+  /** T021 §16：task → 上一輪驗證失敗輸出（重試時注入 worker request 回饋給模型）。 */
+  const verificationFeedback = new Map<string, string>();
   const workerRegistry = deps.workerRegistry;
   const router = workerRegistry ? new WorkerRouter(workerRegistry) : null;
   // Worker 初始化 context：llama.cpp baseUrl 由環境變數設定（§16 設定化）
@@ -254,9 +256,18 @@ export function createRunner(
 
       const request: WorkerRequest = {
         task,
+        previousFeedback: verificationFeedback.get(task.id),
         evidence: {
           taskId: task.id,
-          facts: [],
+          // Rule 3：research 落庫的 evidence 才可進入 coding（非 summary 計數）
+          facts: taskManager.getEvidence(task.id).map((e) => ({
+            id: `ev-${task.id}-${e.source}`,
+            claim: e.claim,
+            source: e.source,
+            sourceType: e.sourceType,
+            confidence: e.confidence,
+            relevance: 1,
+          })),
           constraints: [],
           versions: [],
           unresolvedQuestions: [],
@@ -311,6 +322,15 @@ export function createRunner(
         ws?.request.executionPolicy.worker ?? "pi-local",
         ws?.request.executionPolicy.model ?? "qwen2.5-coder:7b",
       );
+      // patch 落庫（§20 patches 表；Artifact Controller 從 DB 讀取套用）
+      if (result.patch) {
+        taskManager.recordPatch?.(
+          taskId,
+          task.attempt,
+          result.patch,
+          result.changedFiles?.join(", ") ?? "",
+        );
+      }
       step(task, "ARTIFACT_VALIDATION");
     } else {
       // 失敗 → REFLECTION（T020 分類 → retry / research / ask_user / stop）
@@ -354,6 +374,7 @@ export function createRunner(
     reportVerificationFailure(taskId, output) {
       const task = taskManager.getRow(taskId);
       if (!task || task.status !== "VERIFYING") return;
+      verificationFeedback.set(taskId, output);
       step(task, "REFLECTION");
       runReflection(task, output);
     },

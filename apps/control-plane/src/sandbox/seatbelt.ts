@@ -30,6 +30,19 @@ export function buildSeatbeltProfile(
   } catch {
     // workspace 不存在時只允許字面路徑（套用前應已建立）
   }
+  // macOS /tmp 是 /private/tmp 的 symlink：sandbox-exec 的 subpath 比對用真實路徑，
+  // 需同時放行（T023 實測：pytest 的 tempfile 找不到可寫目錄）。
+  try {
+    const realTmp = realpathSync("/tmp");
+    if (!writable.some((w) => w.includes(JSON.stringify(realTmp)))) {
+      writable.push(`(allow file-write* (subpath ${JSON.stringify(realTmp)}))`);
+    }
+  } catch {
+    // /tmp 不存在於本平台時忽略
+  }
+  // /dev/null：pytest logging 層會開檔（T023 實測）——寫入 /dev/null 無害且常見。
+  writable.push(`(allow file-write* (literal "/dev/null"))`);
+  writable.push(`(allow file-read* (literal "/dev/null"))`);
   const writeRule = writable.join("\n");
   // 附加於 profile 尾端（SBPL 規則順序無關；default-deny 下顯式 allow 即放行）
   let profile = `${baseProfile.trimEnd()}\n${writeRule}\n`;
@@ -86,8 +99,16 @@ export class SeatbeltSandbox implements Sandbox {
           ["-f", tmpProfile, ...context.command],
           {
             cwd: context.cwd,
-            // §28.1：HOME 重導 workspace（default-deny 下 npm 需寫 ~/.npm）
-            env: { ...(context.env ?? process.env), HOME: context.cwd },
+            // §28.1：HOME 重導 workspace（default-deny 下 npm 需寫 ~/.npm）；
+            // TMP/TEMP/TMPDIR 重導 /tmp——sandbox 只放行 /tmp 與 workspace，避免
+            // python/pytest 因 TMPDIR 指向 /var/folders 而無可用 temp dir（T023 實測）。
+            env: {
+              ...(context.env ?? process.env),
+              HOME: context.cwd,
+              TMP: "/tmp",
+              TEMP: "/tmp",
+              TMPDIR: "/tmp",
+            },
             stdio: ["ignore", "pipe", "pipe"],
           },
         );

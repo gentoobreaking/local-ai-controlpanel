@@ -1,0 +1,26 @@
+--- a/src/api_client.py
++++ b/src/api_client.py
+@@ -1,5 +1,5 @@
+ import requests
+ 
+-def get_status_code(url):
++def get_status_code(url):
+     """Perform a GET request and return the HTTP status code."""
+     response = requests.get(url)
+     return response.status_code
+
+diff --git a/tests/test_api_client.py b/tests/test_api_client.py
+index 9876543..210abcde 100644
+--- a/tests/test_api_client.py
++++ b/tests/test_api_client.py
+@@ -1,5 +1,5 @@
+ import pytest
+ 
+-from src.api_client import get_status_code
++from src.api_client import get_status_code
+ 
+ class FakeResponse:
+     def __init__(self, status_code: int):
+@@ -9,7 +9,7 @@ def test_get_status_code_returns_correct_status_code(fake_get):
+     result = get_status_code("https://httpbin.org/status/404")
+     assert result == 404

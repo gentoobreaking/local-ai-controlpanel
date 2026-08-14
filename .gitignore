@@ -16,9 +16,17 @@ src-tauri/icons/
 .env
 .env.local
 
-# Control Plane 執行資料（SQLite）
+# Control Plane 執行資料（SQLite；root-level 為執行狀態，不入庫；results-keep/ 內的例外）
 .acp-data/
 apps/control-plane/.acp-data/
-*.db
-*.db-shm
-*.db-wal
+/*.db
+/*.db-shm
+/*.db-wal
+
+# Python / pytest / ruff 快取（T023 開始）
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+
+# Artifact Controller 內部 scratch
+**/.acp-cmp/

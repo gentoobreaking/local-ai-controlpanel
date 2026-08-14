@@ -102,6 +102,8 @@ ollama list
 | T020 | Reflection + Retry：失敗分類器 + 重試政策（§22/§23） | ✅ done |
 | T021 | Worker Interface + Pi Worker + llama.cpp 串接（§15/§16） | ✅ done |
 | T022 | Worker Registry / Router：註冊與選派（§17） | ✅ done |
+| T023 | 第一個 E2E Test（§40）：benchmark/runners/e2e-runner.ts — Policy→Research→Evidence Gate→Pi+llama→Patch→Artifact Gate→pytest，含 T021 驗證失敗回饋重試迴圈 | ✅ done |
+| T024 | Benchmark 統計（n≥10 對照實驗，§40 正式數字） | ⏳ next |
 
 詳細任務書：`~/tasks/local-ai-controlpanel/tasks/`
 

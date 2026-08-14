@@ -1,0 +1,32 @@
+diff --git a/src/api_client.py b/src/api_client.py
+
+--- a/src/api_client.py
++++ b/src/api_client.py
+@@ -1,6 +1,5 @@
+-"""Demo module: uses `requests` external library.
++import requests
+ 
+-Task: implement `get_status_code(url)` that performs a GET request and
+-returns the HTTP status code. The current `requests` API must be researched
+-(e.g. `requests.get()` returns a `Response` object with `.status_code`).
+-"""
++def get_status_code(url):
++    response = requests.get(url)
++    return response.status_code
+diff --git a/tests/test_api_client.py b/tests/test_api_client.py
+
+--- a/tests/test_api_client.py
++++ b/tests/test_api_client.py
+@@ -38,3 +38,12 @@ def test_get_status_code_passes_url(fake_get):
+     result = get_status_code("https://example.com")
+     assert result == 200
+     assert fake_get["url"] == "https://example.com"
++
++def test_get_status_code_returns_correct_status_code(fake_get):
++    fake_get["url"] = "https://example.com"
++    fake_get["kwargs"] = {}
++    fake_response = FakeResponse(404)
++    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake_response)
++
++    result = get_status_code("https://example.com")
++    assert result == 404

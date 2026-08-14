@@ -1,0 +1,88 @@
+{
+  "label": "research-OFF (Raw)",
+  "research": false,
+  "success": false,
+  "attempts": 1,
+  "evidenceCount": 0,
+  "finalStatus": "ASK_USER",
+  "stages": [
+    "RESEARCHING",
+    "ASK_USER"
+  ],
+  "workerOk": false,
+  "patchFiles": [],
+  "verification": [],
+  "eventLog": [
+    {
+      "type": "stage",
+      "stage": "ANALYZING",
+      "ts": "2026-08-14T14:37:33.262Z"
+    },
+    {
+      "type": "stage",
+      "stage": "POLICY_CHECK",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCH_REQUIRED",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCHING",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "EVIDENCE_VALIDATION",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "evidence",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCHING",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "reflection",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "EVIDENCE_VALIDATION",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "evidence",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCHING",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "reflection",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "stage",
+      "stage": "EVIDENCE_VALIDATION",
+      "ts": "2026-08-14T14:37:33.263Z"
+    },
+    {
+      "type": "evidence",
+      "ts": "2026-08-14T14:37:33.264Z"
+    },
+    {
+      "type": "stage",
+      "stage": "ASK_USER",
+      "ts": "2026-08-14T14:37:33.264Z"
+    }
+  ],
+  "error": "research OFF（Raw 對照）：§14.2 on_failed=ask_user → 停在 ASK_USER（知識缺口）"
+}

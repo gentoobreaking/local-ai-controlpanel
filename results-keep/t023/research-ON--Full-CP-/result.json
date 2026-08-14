@@ -1,0 +1,74 @@
+{
+  "label": "research-ON (Full CP)",
+  "research": true,
+  "success": true,
+  "attempts": 2,
+  "evidenceCount": 3,
+  "finalStatus": "COMPLETE",
+  "stages": [
+    "RESEARCHING",
+    "ARTIFACT_VALIDATION"
+  ],
+  "workerOk": true,
+  "patchFiles": [
+    "src/api_client.py"
+  ],
+  "verification": [
+    {
+      "verifier": "unit_test",
+      "status": "PASS"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    }
+  ],
+  "eventLog": [
+    {
+      "type": "stage",
+      "stage": "ANALYZING",
+      "ts": "2026-08-14T14:35:55.518Z"
+    },
+    {
+      "type": "stage",
+      "stage": "POLICY_CHECK",
+      "ts": "2026-08-14T14:35:55.518Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCH_REQUIRED",
+      "ts": "2026-08-14T14:35:55.518Z"
+    },
+    {
+      "type": "stage",
+      "stage": "RESEARCHING",
+      "ts": "2026-08-14T14:35:55.518Z"
+    },
+    {
+      "type": "stage",
+      "stage": "EVIDENCE_VALIDATION",
+      "ts": "2026-08-14T14:35:55.519Z"
+    },
+    {
+      "type": "evidence",
+      "ts": "2026-08-14T14:35:55.519Z"
+    },
+    {
+      "type": "stage",
+      "stage": "PLANNING",
+      "ts": "2026-08-14T14:35:55.519Z"
+    },
+    {
+      "type": "stage",
+      "stage": "WORKER_SELECTION",
+      "ts": "2026-08-14T14:35:55.519Z"
+    },
+    {
+      "type": "stage",
+      "stage": "IMPLEMENTING",
+      "ts": "2026-08-14T14:35:55.519Z"
+    }
+  ],
+  "patchDiff": "diff --git a/src/api_client.py b/src/api_client.py\n\n--- a/src/api_client.py\n+++ b/src/api_client.py\n@@ -5,7 +5,9 @@ import requests\n Task: implement `get_status_code(url)` that performs a GET request and\n returns the HTTP status code. The current `requests` API must be researched\n (e.g. `requests.get()` returns a `Response` object with `.status_code`).\n+\"\"\"\n \n def get_status_code(url):\n     response = requests.get(url)\n     return response.status_code\n+\n",
+  "eventLogCount": 9
+}

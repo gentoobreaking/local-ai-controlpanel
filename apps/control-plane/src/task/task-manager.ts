@@ -159,6 +159,16 @@ export class TaskManager {
       .run(randomUUID(), id, attempt, worker, model, new Date().toISOString());
   }
 
+  /** §20：worker 產出的 patch 落庫（Artifact Controller 套用前先 validate）。 */
+  recordPatch(id: string, attempt: number, diff: string, files: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO patches (id, task_id, attempt, path, status, diff, workspace_dir, created_at)
+         VALUES (?, ?, ?, ?, 'proposed', ?, NULL, ?)`,
+      )
+      .run(randomUUID(), id, attempt, files, diff, new Date().toISOString());
+  }
+
   recordApproval(
     id: string,
     kind: string,
@@ -243,6 +253,61 @@ export class TaskManager {
       count: Number(row.count),
       confidence: row.avg_conf === null ? null : Number(row.avg_conf),
     };
+  }
+
+  /**
+   * §13/Rule 3：research 結果 → evidence 表落庫，供 Evidence Gate 數量統計與
+   * worker 端 evidence bundle 送入 coding。由 research 整合層在完成時呼叫。
+   */
+  recordEvidence(
+    id: string,
+    facts: Array<{
+      claim: string;
+      sourceUri: string;
+      sourceType: string;
+      version?: string;
+      confidence?: number;
+    }>,
+  ): void {
+    const insert = this.db.prepare(
+      `INSERT INTO evidence (id, task_id, claim, source_uri, source_type, version, confidence, relevance, content_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, NULL, ?)`,
+    );
+    const now = new Date().toISOString();
+    for (const f of facts) {
+      insert.run(
+        randomUUID(),
+        id,
+        f.claim,
+        f.sourceUri,
+        f.sourceType,
+        f.version ?? null,
+        f.confidence ?? 0.7,
+        now,
+      );
+    }
+  }
+
+  /** §13：取出 task 的 evidence 清單（worker 端構建 evidence bundle 用）。 */
+  getEvidence(
+    id: string,
+  ): Array<{ claim: string; source: string; sourceType: string; confidence: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT claim, source_uri, source_type, confidence FROM evidence WHERE task_id = ? ORDER BY created_at ASC`,
+      )
+      .all(id) as Array<{
+      claim: string;
+      source_uri: string;
+      source_type: string;
+      confidence: number | null;
+    }>;
+    return rows.map((r) => ({
+      claim: r.claim,
+      source: r.source_uri,
+      sourceType: r.source_type,
+      confidence: r.confidence ?? 0.7,
+    }));
   }
 
   verificationSummary(id: string): TaskDetail["verification"] {
