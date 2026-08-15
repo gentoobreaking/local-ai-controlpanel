@@ -49,6 +49,84 @@ const DEFAULT_STUB_TIMEOUT_MS = 5_000;
 const DEFAULT_LLAMA_TIMEOUT_MS = 300_000;
 const DEFAULT_LLAMA_MAX_TOKENS = 500;
 
+/**
+ * 風格規範常數（T027）— 注入 system prompt，讓模型生成程式碼符合專案 lint 標準。
+ * 對應 lint 規則：
+ *   F401  import 位置（所有 import 集中於檔案頂端，勿在函式內）
+ *   E302  空行（top-level 定義前需 2 空行；class 內 method 間 1 空行）
+ *   E501  行長（≤ 88 字元，超過需換行或縮排續行）
+ *   F403  星號匯入（禁止 `from x import *`）
+ *   W291  行尾空白（行尾不得有空白字元）
+ *   I001  import 順序（stdlib → third-party → local，每組內依字母序）
+ * 以 Python 為基準；其他語言套用對應慣例（同為 lint=FAIL 主因）。
+ */
+export const STYLE_RULES = [
+  "風格規範（所有語言通用，Python 為基準；違反任一項即 lint=FAIL）：",
+  "1. import 位置：所有 import 必須集中在檔案最頂端（module docstring 之後）；嚴禁在函式/class 內部 import。",
+  "2. 空行：top-level 的 function/class 定義前必須有 2 個空行；class 內 method 之間 1 個空行；檔案結尾必須有單一換行（不得多餘空行）。",
+  "3. 行長：每行 ≤ 88 字元；超長時用括號換行、續行或拆成多行，不得超過。",
+  "4. 星號匯入：禁止 `from x import *` 或 `import *`；只能顯式列出要匯入的名稱。",
+  "5. 行尾空白：任何行尾不得有空白字元（trailing whitespace）；空行不得含空白。",
+  "6. import 順序：stdlib → third-party → local 依序分組，組間空一行；每組內依字母序排列。",
+  "7. 命名：snake_case（函式/變數）、PascalCase（class）、常數全大寫；與現有檔案風格一致。",
+  "8. 未使用 import/變數：不要匯入或定義未使用的名稱；刪除舊的未使用 import。",
+  "9. 生成 patch 時：只輸出實際修改的 hunk，不要重新輸出未修改的整段程式碼（避免無關 diff noise）。",
+].join("\n");
+
+/**
+ * Few-shot 案例（T028）— 精選「錯誤 → 修正」對照，讓模型第一次就符合風格規範。
+ * 案例均以 Python 為例（lint=FAIL 主因，對應 T027 規範項目）：
+ *   1. F401：function 內 import → 移到檔案頂端
+ *   2. E302：top-level 定義前缺 2 空行
+ *   3. E501：行長超過 88 字元
+ *   4. F403：星號匯入 `from x import *`
+ * 每筆只展示「關鍵變更 diff」（不放完整檔案），總長度 < 800 tokens。
+ */
+export const FEW_SHOT_STYLE_FIXES = [
+  "## Few-shot：錯誤 → 修正對照（案例均符合上方風格規範；只展示關鍵變更）",
+  "案例 1 — F401 import 位置（嚴禁函式內 import）",
+  "錯誤輸出：",
+  "def fetch(url):",
+  "    import requests    # 錯誤：函式內 import（F401）",
+  "    return requests.get(url)",
+  "修正後 code diff（保留既有 docstring 不動）：",
+  " \"\"\"Module docstring（既有內容，保留）。\"\"\"",
+  "+import requests",
+  "+",
+  " def fetch(url):",
+  "-    import requests",
+  "     return requests.get(url)",
+  "案例 2 — E302 空行（top-level 定義前需 2 空行）",
+  "錯誤輸出：",
+  "import json",
+  "",
+  "def load_config(text):      # 錯誤：import 後只空 1 行（E302）",
+  "    return json.loads(text)",
+  "修正後 code diff：",
+  " import json",
+  "+",
+  "+",
+  " def load_config(text):",
+  "案例 3 — E501 行長（≤ 88 字元）",
+  "錯誤輸出：",
+  "    return collect_metrics(process=process, labels=labels, cache=cache, retries=retries)   # 錯誤：超過 88 字元",
+  "修正後 code diff：",
+  "-    return collect_metrics(process=process, labels=labels, cache=cache, retries=retries)",
+  "+    return collect_metrics(",
+  "+        process=process,",
+  "+        labels=labels,",
+  "+        cache=cache,",
+  "+        retries=retries,",
+  "+    )",
+  "案例 4 — F403 星號匯入（禁止 from x import *）",
+  "錯誤輸出：",
+  "from os import *     # 錯誤：星號匯入（F403）",
+  "修正後 code diff：",
+  "-from os import *",
+  "+import os",
+  "注意：修改現有檔案時保留既有 docstring 與未修改內容原樣；diff 用 ---/+++/@@ hunk 標頭，只含真正變更的行。",
+].join("\n");
+
 export class PiWorker implements CodingWorker {
   readonly id = "pi-local";
   private ctx: WorkerContext | null = null;
@@ -153,7 +231,9 @@ export class PiWorker implements CodingWorker {
       "你只負責根據 evidence 與 plan 完成 coding 任務。",
       "你沒有 web search 能力——所有 research 已由 Control Plane 完成並放在 evidence 中。",
       "輸出格式：先輸出簡短計畫（≤5 行），然後輸出 unified diff patch（---/+++ 格式），最後一行輸出 DONE 或 FAILED: <原因>。",
-      "重要：驗證在無網路的 sandbox 中執行——測試程式不得呼叫真實網路（外部 API/URL）；若要模擬外部服務請用 monkeypatch / stub。",
+"重要：驗證在無網路的 sandbox 中執行——測試程式不得呼叫真實網路（外部 API/URL）；若要模擬外部服務請用 monkeypatch / stub。",
+      STYLE_RULES,
+      FEW_SHOT_STYLE_FIXES,
     ].join("\n");
     const userPrompt = [
       `## Task`,

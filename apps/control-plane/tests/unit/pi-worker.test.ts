@@ -161,6 +161,23 @@ test("llama 模式：fake OpenAI-compatible endpoint 可呼叫（§16 設定化 
     assert.ok(userMsg.content.includes("deployment scaling"), "user prompt 含 objective");
     assert.ok(userMsg.content.includes("kubernetes-official"), "user prompt 含 evidence（§16 contract）");
     assert.ok(!userMsg.content.includes("web"), "user prompt 無 web 相關內容");
+    const sysMsg = body.messages.find((m: { role: string }) => m.role === "system")!;
+    // T027：system prompt 注入風格規範
+    assert.ok(sysMsg.content.includes("風格規範"), "system prompt 含風格規範標題");
+    assert.ok(sysMsg.content.includes("import 位置"), "含 import 位置規則");
+    assert.ok(sysMsg.content.includes("空行"), "含空行規則");
+    assert.ok(sysMsg.content.includes("行長"), "含行長規則");
+    assert.ok(sysMsg.content.includes("星號匯入"), "含星號匯入規則");
+    assert.ok(sysMsg.content.includes("行尾空白"), "含行尾空白規則");
+    assert.ok(sysMsg.content.includes("import 順序"), "含 import 順序規則");
+    // T028：system prompt 注入 few-shot 區塊（錯誤 → 修正案例）
+    assert.ok(sysMsg.content.includes("Few-shot"), "system prompt 含 few-shot 標記");
+    assert.ok(sysMsg.content.includes("錯誤輸出"), "含錯誤輸出標記");
+    assert.ok(sysMsg.content.includes("修正後 code diff"), "含修正後 code diff 標記");
+    assert.ok(sysMsg.content.includes("F401"), "few-shot 涵蓋 F401（import 位置）");
+    assert.ok(sysMsg.content.includes("E302"), "few-shot 涵蓋 E302（空行）");
+    assert.ok(sysMsg.content.includes("E501"), "few-shot 涵蓋 E501（行長）");
+    assert.ok(sysMsg.content.includes("F403"), "few-shot 涵蓋 F403（星號匯入）");
   } finally {
     server.close();
   }
