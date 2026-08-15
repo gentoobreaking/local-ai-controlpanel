@@ -264,6 +264,7 @@ test("llama 模式：RAG 區塊注入（有檢索結果時）", async () => {
     await worker.initialize({ baseUrl: server.url, model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
     const res = await worker.execute(makeRequest());
     const body = server.lastBody();
+    assert.ok(body, "lastBody 不為 null");
     const sysMsg = body.messages.find((m: { role: string }) => m.role === "system")!;
     // T029：system prompt 注入 RAG 區塊（最低優先序）
     assert.ok(sysMsg.content.includes("RAG 歷史修正案例"), "system prompt 含 RAG 區塊標題");
@@ -288,6 +289,7 @@ test("llama 模式：無 RAG retriever 時不注入 RAG 區塊", async () => {
     await worker.initialize({ baseUrl: server.url, model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
     const res = await worker.execute(makeRequest());
     const body = server.lastBody();
+    assert.ok(body, "lastBody 不為 null");
     const sysMsg = body.messages.find((m: { role: string }) => m.role === "system")!;
     assert.ok(!sysMsg.content.includes("RAG 歷史修正案例"), "無 retriever 時不含 RAG 區塊");
   } finally {
@@ -303,6 +305,7 @@ test("llama 模式：RAG retriever 回傳空陣列時不注入 RAG 區塊", asyn
     await worker.initialize({ baseUrl: server.url, model: "qwen2.5-coder:7b", workspaceRoot: "/tmp" });
     const res = await worker.execute(makeRequest());
     const body = server.lastBody();
+    assert.ok(body, "lastBody 不為 null");
     const sysMsg = body.messages.find((m: { role: string }) => m.role === "system")!;
     assert.ok(!sysMsg.content.includes("RAG 歷史修正案例"), "空結果時不含 RAG 區塊");
   } finally {

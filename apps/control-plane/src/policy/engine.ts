@@ -19,7 +19,14 @@ import type {
 } from "./types.js";
 
 export class PolicyEngine {
-  constructor(private readonly policies: LoadedPolicies) {}
+  constructor(
+    private readonly policies: LoadedPolicies,
+    private readonly opts: { enabled?: boolean } = {},
+  ) {}
+
+  get enabled(): boolean {
+    return this.opts.enabled ?? true;
+  }
 
   get defaultPolicy(): DefaultPolicy {
     return this.policies.defaultPolicy;
@@ -39,6 +46,7 @@ export class PolicyEngine {
    * research.required_when → REQUIRE_RESEARCH；高風險 task 也一律要求研究。
    */
   evaluateTask(analysis: TaskAnalysis): TaskPolicyDecision {
+    if (!this.enabled) return { action: "ALLOW_PLANNING" };
     const reasons: string[] = [];
     if (!this.research.enabled) return { action: "ALLOW_PLANNING" };
 
@@ -148,6 +156,7 @@ export class PolicyEngine {
    * evidence 來源數不足 → RESEARCH_AGAIN。
    */
   evaluateResearch(summary: ResearchSummary): ResearchDecision {
+    if (!this.enabled) return { decision: "PASS" };
     if (summary.sourcesCount < this.research.minimum_sources) {
       return {
         decision: "RESEARCH_AGAIN",
@@ -164,6 +173,9 @@ export class PolicyEngine {
     maxRetries: number;
     retryBackoffSeconds: number[];
   } {
+    if (!this.enabled) {
+      return { onPartial: "allow_local", onFailed: "allow_local", maxRetries: 0, retryBackoffSeconds: [] };
+    }
     const rf = this.research.research_failure;
     return {
       onPartial: rf?.on_partial ?? "allow_local",
