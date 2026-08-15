@@ -22,6 +22,8 @@ import { minimatch } from "minimatch";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { StyleCase } from "../rag/style-kb.js";
+import { MemoryRetriever } from "../memory/retriever.js";
+import type { MemoryRecord } from "../memory/types.js";
 
 /** §16 contract JSON 雛形 — Control Plane ↔ Pi 之間的最小 contract。 */
 export interface PiContract {
@@ -33,6 +35,8 @@ export interface PiContract {
   verification: string[];
   /** T021 §16：上一輪驗證失敗輸出（重試回饋）。 */
   previous_feedback?: string;
+  /** T032：專案記憶片段（從 project_memory 檢索的相關修正模式）。 */
+  project_memory?: MemoryRecord[];
 }
 
 export interface PiWorkerOptions {
@@ -46,6 +50,8 @@ export interface PiWorkerOptions {
   llamaMaxTokens?: number;
   /** T029：RAG 檢索器（輸入 contract → 歷史風格修正案例）。未設定 → 不注入 RAG 區塊。 */
   ragRetriever?: (contract: PiContract) => StyleCase[] | Promise<StyleCase[]>;
+  /** T032：專案記憶檢索器（輸入 project name → 專案內成功修正模式）。未設定 → 不注入 Memory 區塊。 */
+  memoryRetriever?: MemoryRetriever;
 }
 
 const DEFAULT_STUB_TIMEOUT_MS = 5_000;
@@ -141,6 +147,7 @@ export class PiWorker implements CodingWorker {
   private readonly llamaTimeoutMs: number;
   private readonly llamaMaxTokens: number;
   private readonly ragRetriever: ((contract: PiContract) => StyleCase[] | Promise<StyleCase[]>) | null;
+  private readonly memoryRetriever: MemoryRetriever | null;
 
   constructor(opts: PiWorkerOptions = {}) {
     this.allowStub = opts.allowStub ?? true;
@@ -148,6 +155,7 @@ export class PiWorker implements CodingWorker {
     this.llamaTimeoutMs = opts.llamaTimeoutMs ?? DEFAULT_LLAMA_TIMEOUT_MS;
     this.llamaMaxTokens = opts.llamaMaxTokens ?? DEFAULT_LLAMA_MAX_TOKENS;
     this.ragRetriever = opts.ragRetriever ?? null;
+    this.memoryRetriever = opts.memoryRetriever ?? null;
   }
 
   get mode(): "llama" | "stub" {
@@ -177,6 +185,12 @@ export class PiWorker implements CodingWorker {
         );
       }
     }
+    // T032：載入專案記憶（以 workspace 路徑最後一段作為 project 名稱）
+    if (this.memoryRetriever && context.workspaceRoot) {
+      const projectName = context.workspaceRoot.split("/").pop() ?? "default";
+      const memories = this.memoryRetriever.listMemories(projectName);
+      console.error(`[pi-worker] loaded ${memories.length} project memories for ${projectName}`);
+    }
   }
 
   async interrupt(): Promise<void> {
@@ -191,7 +205,7 @@ export class PiWorker implements CodingWorker {
 
   /** 建構 §16 contract JSON（evidence 以 evidence 欄位傳遞）。 */
   private buildContract(req: WorkerRequest): PiContract {
-    return {
+    const contract: PiContract = {
       task_id: req.task.id,
       objective: req.task.request ?? "",
       evidence: req.evidence.facts.map((f) => ({
@@ -203,6 +217,38 @@ export class PiWorker implements CodingWorker {
       verification: req.executionPolicy.verification,
       ...(req.previousFeedback ? { previous_feedback: req.previousFeedback } : {}),
     };
+
+    // T032：注入專案記憶片段（依語言、錯誤類型檢索）
+    if (this.memoryRetriever && this.ctx?.workspaceRoot) {
+      const projectName = this.ctx.workspaceRoot.split("/").pop() ?? "default";
+      const language = req.workspace?.languages?.[0] ?? "python";
+      // 從 previous_feedback 推斷錯誤類型
+      const errorTypes = this.extractErrorTypes(req.previousFeedback ?? "");
+      const query = `${language} ${errorTypes.join(" ")} ${req.task.request?.slice(0, 100) ?? ""}`;
+      const memories = this.memoryRetriever.retrieveMemory({
+        project: projectName,
+        query,
+        topK: 3,
+        threshold: 0.7,
+      });
+      if (memories.length > 0) {
+        contract.project_memory = memories.map((m) => m.record);
+        console.error(`[pi-worker] injected ${memories.length} project memories into contract`);
+      }
+    }
+
+    return contract;
+  }
+
+  /** 從驗證失敗輸出抽取 lint 錯誤代碼。 */
+  private extractErrorTypes(feedback: string): string[] {
+    const found = new Set<string>();
+    feedback.replace(/([A-Z]\d{3})/g, (m) => {
+      if (!/^(E9|F|W|I|E1|E2|E3|E4|E7|E8)/.test(m)) return m;
+      found.add(m);
+      return m;
+    });
+    return [...found];
   }
 
   async execute(request: WorkerRequest): Promise<WorkerResult> {
@@ -294,6 +340,28 @@ export class PiWorker implements CodingWorker {
           output,
         );
       }
+
+      // T032：成功完成且有 patch 時，提取關鍵修正模式存入專案記憶
+      if (done && this.memoryRetriever && this.ctx?.workspaceRoot) {
+        const projectName = this.ctx.workspaceRoot.split("/").pop() ?? "default";
+        const language = request.workspace?.languages?.[0] ?? "python";
+        const patch = this.extractPatch(output) ?? "";
+        if (patch) {
+          // 從 patch 推斷錯誤類型（簡單啟發式：檢查 diff 中的錯誤模式）
+          const errorTypes = this.extractErrorTypesFromPatch(patch);
+          const tags = [language, ...errorTypes, "style_fix"];
+          this.memoryRetriever.storeMemory({
+            taskId: request.task.id,
+            project: projectName,
+            language,
+            errorType: errorTypes[0] ?? "STYLE_FIX",
+            fixedDiff: patch.slice(0, 1000), // 只存關鍵 diff 片段
+            tags,
+          });
+          console.error(`[pi-worker] stored project memory for ${projectName}: ${errorTypes.join(",") || "STYLE_FIX"}`);
+        }
+      }
+
       return {
         ok: done,
         patch: this.extractPatch(output),
@@ -341,6 +409,32 @@ export class PiWorker implements CodingWorker {
       );
     }
     return [lines.join("\n")];
+  }
+
+  /** 從 patch 推斷錯誤類型（簡單啟發式：檢查 diff 中常見錯誤模式）。 */
+  private extractErrorTypesFromPatch(patch: string): string[] {
+    const found = new Set<string>();
+    const lower = patch.toLowerCase();
+    // 常見 Python lint 錯誤模式
+    if (/(^|\s)import\s+\w+\s+inside\s+function/.test(patch) || /def\s+\w+\([^)]*\):\s*\n\s+import\s/.test(patch)) {
+      found.add("F401");
+    }
+    if (/^\s*def\s+\w+\(/m.test(patch) && !/^\n{2}def\s/m.test(patch)) {
+      found.add("E302");
+    }
+    if (/.{89,}/.test(patch)) {
+      found.add("E501");
+    }
+    if (/from\s+\w+\s+import\s+\*/.test(patch)) {
+      found.add("F403");
+    }
+    if (/trailing\s+whitespace/.test(patch)) {
+      found.add("W291");
+    }
+    if (/import\s+order/.test(patch)) {
+      found.add("I001");
+    }
+    return [...found];
   }
 
   // ── stub 模式：無 llama.cpp 時的最小可測路徑（§16 備註）───────────────
