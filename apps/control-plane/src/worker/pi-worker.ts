@@ -21,6 +21,7 @@ import { LlamaClient, LlamaConnectionError } from "./llama-client.js";
 import { minimatch } from "minimatch";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import type { StyleCase } from "../rag/style-kb.js";
 
 /** §16 contract JSON 雛形 — Control Plane ↔ Pi 之間的最小 contract。 */
 export interface PiContract {
@@ -43,6 +44,8 @@ export interface PiWorkerOptions {
   llamaTimeoutMs?: number;
   /** llama 模式生成 max_tokens，預設 500（patch 任務輸出有限；防 CPU 推理無限生成）。 */
   llamaMaxTokens?: number;
+  /** T029：RAG 檢索器（輸入 contract → 歷史風格修正案例）。未設定 → 不注入 RAG 區塊。 */
+  ragRetriever?: (contract: PiContract) => StyleCase[] | Promise<StyleCase[]>;
 }
 
 const DEFAULT_STUB_TIMEOUT_MS = 5_000;
@@ -137,12 +140,14 @@ export class PiWorker implements CodingWorker {
   private readonly pingTimeoutMs: number;
   private readonly llamaTimeoutMs: number;
   private readonly llamaMaxTokens: number;
+  private readonly ragRetriever: ((contract: PiContract) => StyleCase[] | Promise<StyleCase[]>) | null;
 
   constructor(opts: PiWorkerOptions = {}) {
     this.allowStub = opts.allowStub ?? true;
     this.pingTimeoutMs = opts.pingTimeoutMs ?? 3_000;
     this.llamaTimeoutMs = opts.llamaTimeoutMs ?? DEFAULT_LLAMA_TIMEOUT_MS;
     this.llamaMaxTokens = opts.llamaMaxTokens ?? DEFAULT_LLAMA_MAX_TOKENS;
+    this.ragRetriever = opts.ragRetriever ?? null;
   }
 
   get mode(): "llama" | "stub" {
@@ -234,6 +239,7 @@ export class PiWorker implements CodingWorker {
 "重要：驗證在無網路的 sandbox 中執行——測試程式不得呼叫真實網路（外部 API/URL）；若要模擬外部服務請用 monkeypatch / stub。",
       STYLE_RULES,
       FEW_SHOT_STYLE_FIXES,
+      ...(await this.buildRagBlock(contract)),
     ].join("\n");
     const userPrompt = [
       `## Task`,
@@ -303,6 +309,38 @@ export class PiWorker implements CodingWorker {
       }
       return this.fail(e.message, started, "tool_error", e.message);
     }
+  }
+
+  /** T029：依 contract 檢索 RAG 案例並格式化為最低優先序區塊（≤500 tokens；無結果 → 略過）。 */
+  private async buildRagBlock(contract: PiContract): Promise<string[]> {
+    if (!this.ragRetriever) return [];
+    let cases: StyleCase[];
+    try {
+      cases = await this.ragRetriever(contract);
+    } catch {
+      return [];
+    }
+    if (cases.length === 0) return [];
+    const SNIPPET_MAX = 200;
+    const DIFF_MAX = 380;
+    const lines: string[] = ["## RAG 歷史修正案例（同語言/同錯誤類型；最低優先，僅供參考）"];
+    for (const c of cases) {
+      const date = c.createdAt.slice(0, 10);
+      const snippet = c.errorSnippet.length > SNIPPET_MAX
+        ? c.errorSnippet.slice(0, SNIPPET_MAX) + "…"
+        : c.errorSnippet;
+      const diff = c.fixedDiff.length > DIFF_MAX
+        ? c.fixedDiff.slice(0, DIFF_MAX) + "…"
+        : c.fixedDiff;
+      lines.push(
+        `### ${c.errorType} / ${c.language} / ${date}`,
+        "❌ 錯誤輸出：",
+        snippet || "(空)",
+        "✅ 修正後 code diff：",
+        diff || "(空)",
+      );
+    }
+    return [lines.join("\n")];
   }
 
   // ── stub 模式：無 llama.cpp 時的最小可測路徑（§16 備註）───────────────
