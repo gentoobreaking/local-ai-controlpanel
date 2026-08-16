@@ -53,7 +53,7 @@ test("task status / inspect / list / cancel 流程", async () => {
   assert.equal(listRes.code, 0);
   const taskLine = listRes.lines.find((l) => l.startsWith("TASK-"));
   assert.ok(taskLine, "list 應包含至少一筆任務");
-  const id = taskLine!.split("\t")[0]!;
+  const id = taskLine!.split(/\s+/)[0]!;
 
   const statusRes = await fakeRun(["task", "status", id]);
   assert.equal(statusRes.code, 0);
@@ -77,7 +77,7 @@ test("task status 缺 id 回 exit 2", async () => {
 test("research / evidence：狀態查詢可運作", async () => {
   await fakeRun(["task", "run", "research 測試"]);
   const listRes = await fakeRun(["task", "list"]);
-  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split("\t")[0]!;
+  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split(/\s+/)[0]!;
   const resR = await fakeRun(["research", id]);
   assert.equal(resR.code, 0);
   const resE = await fakeRun(["evidence", id]);
@@ -99,7 +99,7 @@ test("workers list / policy validate / sandbox check / strategy / logs / cloud u
 
   await fakeRun(["task", "run", "logs 測試"]);
   const listRes = await fakeRun(["task", "list"]);
-  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split("\t")[0]!;
+  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split(/\s+/)[0]!;
 
   const s = await fakeRun(["strategy", id]);
   assert.equal(s.code, 0);
@@ -116,7 +116,7 @@ test("verify 回傳 sandbox 驗證結果（T012/T016 接入）", async () => {
   const ws = mkdtempSync(join(tmpdir(), "acp-cli-verify-"));
   await fakeRun(["task", "run", "verify 測試", "--workspace", ws]);
   const listRes = await fakeRun(["task", "list"]);
-  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split("\t")[0]!;
+  const id = listRes.lines.find((l) => l.startsWith("TASK-"))!.split(/\s+/)[0]!;
   const res = await fakeRun(["verify", id, "--sandbox", "seatbelt"]);
   assert.equal(res.code, 0, `verify 失敗: ${res.lines.join("\n")}`);
   assert.ok(res.lines.join("\n").includes("git_diff"), "應包含 verifier 結果");

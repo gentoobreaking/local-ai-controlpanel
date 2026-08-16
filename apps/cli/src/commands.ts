@@ -1,119 +1,266 @@
-// acp 指令集（spec §29）。每個指令最後以字串輸出；exit code 反映成敗。
+// acp/cp 指令分派（spec §29 + T033 完善）。
+// 每支指令最後以 CommandResult 回傳；exit code 反映成敗（0 ok / 1 執行失敗 / 2 用法錯誤）。
+
+import { statSync } from "node:fs";
+import { dirname, basename, resolve } from "node:path";
 
 import type { ApiClient, CliHttpError } from "./api.js";
+import type { OutputFormat } from "./format.js";
+import { renderJson } from "./format.js";
+import type { CommandResult } from "./command-types.js";
+import type { CliContext } from "./context.js";
+import { errMessage } from "./context.js";
+import { parseArgs, CliUsageError } from "./flags.js";
+import { HELP } from "./commands/help.js";
+import {
+  taskCreate,
+  taskList,
+  taskShow,
+  taskCancel,
+  taskApprove,
+  taskRetry,
+  taskWatch,
+  taskRunLegacy,
+  taskStatusLegacy,
+  usageTask,
+} from "./commands/task.js";
+import { runSingle, baselineRun } from "./commands/run.js";
+import { reportGenerate } from "./commands/report.js";
+import { dbExport } from "./commands/db.js";
+import { workerPing, workerModels, workerUsage } from "./commands/worker.js";
 
-export interface CommandResult {
-  code: number;
-  lines: string[];
+export type { CommandResult } from "./command-types.js";
+
+export const VERSION = "0.6.0";
+
+export async function runCommand(
+  argv: string[],
+  client: ApiClient,
+  opts: { baseUrl?: string; fmt?: OutputFormat } = {},
+): Promise<CommandResult> {
+  const ctx: CliContext = {
+    client,
+    baseUrl: opts.baseUrl ?? defaultBaseUrl(),
+    fmt: opts.fmt ?? "table",
+  };
+
+  // 容錯：`cp ...` / `acp ...` 首個 token 為程式名（bin 呼叫時 process.argv 不含）。
+  let args = argv;
+  if (args.length > 0 && (args[0] === "cp" || args[0] === "acp")) {
+    args = args.slice(1);
+  }
+
+  try {
+    if (args.length === 0) return helpResult(args);
+    const [cmd, ...rest] = args as [string, ...string[]];
+    switch (cmd) {
+      case "help":
+      case "--help":
+      case "-h":
+        return helpResult(rest);
+      case "--version":
+      case "-v":
+        return { code: 0, lines: [`cp CLI v${VERSION}`] };
+      case "task":
+        return await dispatchTask(ctx, rest);
+      case "run":
+        return await runSingle(ctx, rest);
+      case "baseline":
+        if (rest[0] === "run") return await baselineRun(ctx, rest.slice(1));
+        return { code: 2, lines: ["用法: cp baseline run [--lang <lang>] [--baseline A-F|all] ...（cp --help）"] };
+      case "report":
+        if (rest[0] === "generate") return await reportGenerate(ctx, rest.slice(1));
+        return { code: 2, lines: ["用法: cp report generate [--baseline A-F|all]（cp --help）"] };
+      case "db":
+        if (rest[0] === "export") return await dbExport(ctx, rest.slice(1));
+        return { code: 2, lines: ["用法: cp db export [--db <path>] [--table <name>] [--format csv|json]（cp --help）"] };
+      case "worker":
+        return await dispatchWorker(ctx, rest);
+      case "workers":
+        if (rest[0] === "list") return await workersList(ctx.client);
+        return helpResult(rest);
+      case "policy":
+        return await dispatchPolicy(ctx, rest);
+      case "verify":
+        return await verify(ctx.client, rest);
+      case "research": {
+        const id = rest[0] ?? "";
+        return id ? await research(ctx.client, id) : { code: 2, lines: ["用法: acp research <id>"] };
+      }
+      case "evidence": {
+        const id = rest[0] ?? "";
+        return id ? await evidence(ctx.client, id) : { code: 2, lines: ["用法: acp evidence <id>"] };
+      }
+      case "logs": {
+        const id = rest[0] ?? "";
+        return id ? await logs(ctx.client, id) : { code: 2, lines: ["用法: acp logs <id>"] };
+      }
+      case "strategy": {
+        const id = rest[0] ?? "";
+        return id ? await strategy(ctx.client, id) : { code: 2, lines: ["用法: acp strategy <id>"] };
+      }
+      case "sandbox":
+        if (rest[0] === "check") return await sandboxCheck(ctx.client);
+        return helpResult(rest);
+      case "cloud":
+        if (rest[0] === "usage") return cloudUsage();
+        return helpResult(rest);
+      default:
+        return { code: 2, lines: [`未知指令: ${String(cmd)}`, "", ...HELP_SPLIT] };
+    }
+  } catch (err) {
+    if (err instanceof CliUsageError) {
+      return { code: 2, lines: [`用法錯誤: ${err.message}`] };
+    }
+    if (err instanceof TypeError) {
+      return {
+        code: 1,
+        lines: ["無法連線 Control Plane（127.0.0.1:3001）。請先執行: pnpm cp:dev"],
+      };
+    }
+    const e = err as CliHttpError & Error;
+    if (e.status === 404) return { code: 1, lines: [`任務不存在: ${e.message}`] };
+    if (e.status === 409) return { code: 1, lines: [e.message] };
+    return { code: 1, lines: [`錯誤: ${e.message}`] };
+  }
 }
 
-export const USAGE = `acp — Agent Control Plane CLI（v0.5, Phase 1–5 local_only）
-
-用法:
-  acp task run "<request>" [--sandbox <mode>]  建立並執行任務
-  acp task status <id>                         查詢任務狀態
-  acp task inspect <id>                        完整任務詳情
-  acp task list                                列出所有任務
-  acp task cancel <id>                         取消任務
-  acp research <id>                            查詢研究階段狀態
-  acp evidence <id>                            查詢證據統計
-  acp workers list                             列出 worker
-  acp policy validate                          驗證 policies/*.yaml
-  acp verify <id> [--sandbox <mode>]           執行驗證（T012/T016 接入）
-  acp logs <id>                                查詢 attempt/verification/reflection 日誌
-  acp strategy <id>                            查詢執行策略
-  acp sandbox check                            探測可用 sandbox
-  acp cloud usage                              雲端用量（Phase 10+ 未啟用）
-
-環境變數: ACP_URL（預設 http://127.0.0.1:3001）`;
-
-function help(args: string[]): CommandResult {
-  return { code: 0, lines: USAGE.split("\n") };
+function defaultBaseUrl(): string {
+  return process.env.ACP_URL ?? "http://127.0.0.1:3001";
 }
 
-async function taskRun(client: ApiClient, args: string[]): Promise<CommandResult> {
-  const positional: string[] = [];
-  let sandbox: string | undefined;
-  let workspace: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === "--sandbox") {
-      sandbox = args[++i];
-    } else if (a === "--workspace") {
-      workspace = args[++i];
-    } else if (a === "--help" || a === "-h") {
-      return { code: 0, lines: ["用法: acp task run \"<request>\" [--sandbox <mode>] [--workspace <path>"] };
-    } else if (a !== undefined) {
-      positional.push(a);
+function helpResult(_rest: string[]): CommandResult {
+  return { code: 0, lines: HELP.split("\n") };
+}
+
+const HELP_SPLIT = HELP.split("\n");
+
+// ---- task 分派（T033 新指令 + §29 舊別名） --------------------------------
+
+async function dispatchTask(ctx: CliContext, args: string[]): Promise<CommandResult> {
+  const [sub, ...rest] = args as [string, ...string[]];
+  switch (sub) {
+    case "create":
+      return await taskCreate(ctx, rest);
+    case "list":
+      return await taskList(ctx, rest);
+    case "show":
+      return await taskShow(ctx, rest);
+    case "cancel":
+      return await taskCancel(ctx, rest);
+    case "approve":
+      return await taskApprove(ctx, rest);
+    case "retry":
+      return await taskRetry(ctx, rest);
+    case "watch":
+      return await taskWatch(ctx, rest);
+    case "run":
+      return await taskRunLegacy(ctx.client, rest);
+    case "status":
+      return rest[0] ? await taskStatusLegacy(ctx.client, rest[0]!) : { code: 2, lines: ["用法: acp task status <id>"] };
+    case "inspect": {
+      if (!rest[0]) return { code: 2, lines: ["用法: acp task inspect <id>"] };
+      const t = await ctx.client.getTask(rest[0]!);
+      return { code: 0, lines: renderJson(t) };
+    }
+    default:
+      return usageTask();
+  }
+}
+
+// ---- worker 分派 ---------------------------------------------------------
+
+async function dispatchWorker(ctx: CliContext, args: string[]): Promise<CommandResult> {
+  const [sub, ...rest] = args as [string, ...string[]];
+  switch (sub) {
+    case "ping":
+      return await workerPing(ctx, rest);
+    case "models":
+      return await workerModels(ctx, rest);
+    default:
+      return workerUsage();
+  }
+}
+
+// ---- policy validate（--config 時走本地驗證，T033） -----------------------
+
+async function dispatchPolicy(ctx: CliContext, args: string[]): Promise<CommandResult> {
+  const [sub, ...rest] = args as [string, ...string[]];
+  if (sub !== "validate") return helpResult(args);
+  const { flags } = parseArgs(rest, ["--config"], []);
+  const configPath = flags.get("--config");
+  if (configPath) return await validatePolicyLocally(configPath);
+  return await policyValidateRemote(ctx.client);
+}
+
+interface LocalPolicyReport {
+  valid: boolean;
+  dir: string;
+  report: Array<{ name: string; valid: boolean; errors: string[] }>;
+}
+
+interface LocalPolicyLoader {
+  loadPolicies: (dir: string) => LocalPolicyReport;
+}
+
+/** 動態 import control-plane loader：型別以 cast 保留，避免跨 package rootDir 衝突。 */
+async function loadPoliciesLocally(): Promise<LocalPolicyLoader> {
+  const spec = "../../control-plane/src/policy/loader.js";
+  return (await import(spec as string)) as unknown as LocalPolicyLoader;
+}
+
+async function validatePolicyLocally(path: string): Promise<CommandResult> {
+  const abs = resolve(path);
+  let stats;
+  try {
+    stats = statSync(abs);
+  } catch {
+    return { code: 1, lines: [`無法讀取: ${path}`] };
+  }
+  const dir = stats.isDirectory() ? abs : dirname(abs);
+  const only = stats.isFile() ? basename(abs) : undefined;
+  let loaded: LocalPolicyReport;
+  try {
+    const loader = await loadPoliciesLocally();
+    loaded = loader.loadPolicies(dir);
+  } catch (err) {
+    return { code: 1, lines: [`載入失敗: ${(err as Error).message}`] };
+  }
+  const entries = only ? loaded.report.filter((r) => r.name === only) : loaded.report;
+  const valid = entries.every((r) => r.valid);
+  const lines: string[] = [];
+  if (only) lines.push(`valid: ${String(valid)}（${dir}/${only}）`);
+  else lines.push(`valid: ${String(valid)}`);
+  for (const p of entries) {
+    lines.push(`  - ${p.name}: ${p.valid ? "ok" : "INVALID"}`);
+    for (const e of p.errors) lines.push(`      ${e}`);
+  }
+  return { code: valid ? 0 : 1, lines };
+}
+
+async function policyValidateRemote(client: ApiClient): Promise<CommandResult> {
+  const res = await client.validatePolicy();
+  const lines: string[] = [];
+  if (res.valid === undefined) {
+    return { code: 0, lines: [`valid: ${String(res.valid)}`] };
+  }
+  lines.push(`valid: ${String(res.valid)}`);
+  if (Array.isArray(res.policies)) {
+    for (const p of res.policies as { name?: string; valid?: boolean; errors?: string[] }[]) {
+      lines.push(`  - ${String(p.name)}: ${p.valid ? "ok" : "INVALID"}`);
+      for (const e of p.errors ?? []) lines.push(`      ${e}`);
     }
   }
-  if (positional.length === 0) {
-    return { code: 2, lines: ["錯誤: 缺少 userRequest 參數。用法: acp task run \"<request>\""] };
-  }
-  const res = await client.createTask({
-    userRequest: positional.join(" "),
-    workspace,
-    sandboxMode: sandbox,
-  });
-  return {
-    code: 0,
-    lines: [
-      `任務已建立: ${res.id}`,
-      `狀態: ${res.status}`,
-      `workspace: ${res.workspace ?? "（未指定）"}`,
-      `sandbox: ${res.sandboxMode ?? "（policy 決定）"}`,
-      `進度: acp task status ${res.id}`,
-      `驗證: acp verify ${res.id}`,
-    ],
-  };
+  return { code: res.valid === true ? 0 : 1, lines };
 }
 
-async function taskStatus(client: ApiClient, id: string): Promise<CommandResult> {
-  const t = await client.getTask(id);
-  return {
-    code: 0,
-    lines: [
-      `任務 ${t.id}: ${t.status}`,
-      `attempt: ${String(t.attempt)}`,
-      `sandbox: ${String(t.sandboxMode ?? "-")}`,
-      `證據: ${String(t.evidenceCount ?? 0)} 筆`,
-      `驗證: ${String(t.verificationSummary?.passed ?? 0)} passed / ${String(t.verificationSummary?.failed ?? 0)} failed`,
-    ],
-  };
-}
-
-async function taskInspect(client: ApiClient, id: string): Promise<CommandResult> {
-  const t = await client.getTask(id);
-  return { code: 0, lines: [JSON.stringify(t, null, 2)] };
-}
-
-async function taskList(client: ApiClient): Promise<CommandResult> {
-  const res = await client.listTasks();
-  if (res.length === 0) return { code: 0, lines: ["（無任務）"] };
-  return {
-    code: 0,
-    lines: [
-      "ID\tSTATUS\tATTEMPT\tSANDBOX",
-      ...res.map((t) =>
-        `${String(t.id)}\t${String(t.status)}\t${String(t.attempt)}\t${String(t.sandboxMode ?? "-")}`,
-      ),
-    ],
-  };
-}
-
-async function taskCancel(client: ApiClient, id: string): Promise<CommandResult> {
-  const res = await client.cancelTask(id);
-  return { code: 0, lines: [`任務 ${res.id} → ${res.status}`] };
-}
+// ---- 既有指令（§29，T009 保留實作） --------------------------------------
 
 async function research(client: ApiClient, id: string): Promise<CommandResult> {
   const t = await client.getTask(id);
   const status = String(t.status);
   if (status === "RESEARCH_REQUIRED") {
-    return {
-      code: 0,
-      lines: [`任務 ${t.id}: 研究階段尚未開始（等待 Research Engine，T017 接入）`],
-    };
+    return { code: 0, lines: [`任務 ${t.id}: 研究階段尚未開始（等待 Research Engine）`] };
   }
   if (status === "RESEARCHING" || status === "RESEARCH_COMPLETE" || status === "ANALYZING") {
     return { code: 0, lines: [`任務 ${t.id}: 研究階段 ${status}`] };
@@ -123,13 +270,9 @@ async function research(client: ApiClient, id: string): Promise<CommandResult> {
 
 async function evidence(client: ApiClient, id: string): Promise<CommandResult> {
   const t = await client.getTask(id);
-  const n = Number(t.evidenceCount ?? 0);
   return {
     code: 0,
-    lines:
-      n === 0
-        ? [`任務 ${t.id}: 尚無證據（Research Engine 於 T017 接入）`]
-        : [`任務 ${t.id}: ${n} 筆證據`],
+    lines: [`任務 ${t.id}: ${String(t.evidence?.count ?? 0)} 筆證據`],
   };
 }
 
@@ -146,34 +289,13 @@ async function workersList(client: ApiClient): Promise<CommandResult> {
   };
 }
 
-async function policyValidate(client: ApiClient): Promise<CommandResult> {
-  const res = await client.validatePolicy();
-  const lines: string[] = [];
-  if (res.valid === undefined) {
-    return { code: 0, lines: [`valid: ${String(res.valid)}`] };
-  }
-  lines.push(`valid: ${String(res.valid)}`);
-  if (Array.isArray(res.policies)) {
-    for (const p of res.policies as { name?: string; valid?: boolean; errors?: string[] }[]) {
-      lines.push(`  - ${String(p.name)}: ${p.valid ? "ok" : "INVALID"}`);
-      for (const e of p.errors ?? []) lines.push(`      ${e}`);
-    }
-  }
-  return { code: 0, lines };
-}
-
 async function verify(client: ApiClient, args: string[]): Promise<CommandResult> {
-  const positional: string[] = [];
-  let sandbox: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--sandbox") sandbox = args[++i];
-    else positional.push(args[i]!);
+  const { positionals, flags } = parseArgs(args, ["--sandbox"], []);
+  if (positionals.length !== 1) {
+    return { code: 2, lines: ["用法: acp verify <id> [--sandbox <mode>]"] };
   }
-  if (positional.length !== 1) {
-    return { code: 2, lines: ["用法: acp verify <id> [--sandbox <mode>"] };
-  }
-  const res = await client.verifyTask(positional[0]!, { sandboxMode: sandbox });
-  const taskId = String(res.taskId ?? positional[0]);
+  const res = await client.verifyTask(positionals[0]!, { sandboxMode: flags.get("--sandbox") });
+  const taskId = String(res.taskId ?? positionals[0]);
   if (res.error) return { code: 1, lines: [`任務 ${taskId}: ${String(res.error)} — ${String(res.message ?? "")}`] };
   const results = (res.results ?? []) as { verifier: string; status: string; output?: string }[];
   const lines = [`任務 ${taskId} ${String(res.status ?? "verified")} — sandbox=${String(res.sandbox ?? "auto")}：`];
@@ -195,7 +317,7 @@ async function logs(client: ApiClient, id: string): Promise<CommandResult> {
 
 async function strategy(client: ApiClient, id: string): Promise<CommandResult> {
   const s = await client.getStrategy(id);
-  return { code: 0, lines: [`策略 ${s.strategy}: ${JSON.stringify(s)}`] };
+  return { code: 0, lines: [`策略 ${JSON.stringify(s.strategy ?? "")}: ${JSON.stringify(s)}`] };
 }
 
 async function sandboxCheck(client: ApiClient): Promise<CommandResult> {
@@ -213,66 +335,4 @@ async function cloudUsage(): Promise<CommandResult> {
     code: 0,
     lines: ["雲端用量: Phase 1–5 為 local_only（§24），此功能於 Phase 10+ 啟用"],
   };
-}
-
-export async function runCommand(argv: string[], client: ApiClient): Promise<CommandResult> {
-  if (argv.length === 0) return help(argv);
-  const [cmd, sub, ...rest] = argv;
-  try {
-    switch (cmd) {
-      case "help":
-      case "--help":
-      case "-h":
-        return help(rest);
-      case "task":
-        if (sub === "run") return await taskRun(client, rest);
-        if (sub === "status") return rest[0] ? await taskStatus(client, rest[0]!) : { code: 2, lines: ["用法: acp task status <id>"] };
-        if (sub === "inspect") return rest[0] ? await taskInspect(client, rest[0]!) : { code: 2, lines: ["用法: acp task inspect <id>"] };
-        if (sub === "list") return await taskList(client);
-        if (sub === "cancel") return rest[0] ? await taskCancel(client, rest[0]!) : { code: 2, lines: ["用法: acp task cancel <id>"] };
-        return help(rest);
-      case "research": {
-        const id = sub ?? rest[0];
-        return id ? await research(client, id) : { code: 2, lines: ["用法: acp research <id>"] };
-      }
-      case "evidence": {
-        const id = sub ?? rest[0];
-        return id ? await evidence(client, id) : { code: 2, lines: ["用法: acp evidence <id>"] };
-      }
-      case "workers":
-        if (sub === "list") return await workersList(client);
-        return help(rest);
-      case "policy":
-        if (sub === "validate") return await policyValidate(client);
-        return help(rest);
-      case "verify":
-        return await verify(client, [sub, ...rest].filter((x) => x !== undefined) as string[]);
-      case "logs": {
-        const id = sub ?? rest[0];
-        return id ? await logs(client, id) : { code: 2, lines: ["用法: acp logs <id>"] };
-      }
-      case "strategy": {
-        const id = sub ?? rest[0];
-        return id ? await strategy(client, id) : { code: 2, lines: ["用法: acp strategy <id>"] };
-      }
-      case "sandbox":
-        if (sub === "check") return await sandboxCheck(client);
-        return help(rest);
-      case "cloud":
-        if (sub === "usage") return await cloudUsage();
-        return help(rest);
-      default:
-        return { code: 2, lines: [`未知指令: ${cmd}`, "", ...USAGE.split("\n")] };
-    }
-  } catch (err) {
-    if (err instanceof TypeError) {
-      return {
-        code: 1,
-        lines: ["無法連線 Control Plane（127.0.0.1:3001）。請先執行: pnpm cp:dev"],
-      };
-    }
-    const e = err as CliHttpError & Error;
-    if (e.status === 404) return { code: 1, lines: [`任務不存在: ${e.message}`] };
-    return { code: 1, lines: [`錯誤: ${e.message}`] };
-  }
 }

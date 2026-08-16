@@ -11,6 +11,15 @@ import type { VerificationEngine } from "../verification/engine.js";
 import { DEFAULT_VERIFIERS } from "../verification/verifiers.js";
 import { buildVerificationContext } from "../verification/context.js";
 import type { WorkerRegistry } from "../worker/registry.js";
+import { LlamaClient, LlamaConnectionError } from "../worker/llama-client.js";
+
+/** llama.cpp 端點設定：與 runner.ts 同源（env 覆寫，預設 localhost:8080）。 */
+function llamaEndpoint() {
+  return {
+    baseUrl: process.env.LLAMA_BASE_URL ?? "http://127.0.0.1:8080",
+    model: process.env.LLAMA_MODEL ?? "qwen2.5-coder:7b",
+  };
+}
 
 export async function createCliRouter(
   app: FastifyInstance,
@@ -79,6 +88,65 @@ export async function createCliRouter(
       }
       return reply.code(500).send({ error: "verification failed", message: e.message, taskId: id });
     }
+  });
+
+  // T033 worker ping — 探測 llama.cpp 連線（§16）
+  app.get("/api/v1/worker/ping", async (_req, reply) => {
+    const { baseUrl, model } = llamaEndpoint();
+    const client = new LlamaClient({ baseUrl, model });
+    try {
+      const result = await client.ping();
+      return reply.code(result.ok ? 200 : 503).send({ ok: result.ok, baseUrl, model, latencyMs: result.latencyMs, detail: result.detail });
+    } catch (err) {
+      const e = err as Error;
+      if (e instanceof LlamaConnectionError) {
+        return reply.code(503).send({ ok: false, baseUrl, model, detail: e.message });
+      }
+      return reply.code(500).send({ ok: false, baseUrl, model, detail: e.message });
+    }
+  });
+
+  // T033 worker models — 註冊的 worker 模型 + llama-server /v1/models（可達時）
+  app.get("/api/v1/worker/models", async () => {
+    const { baseUrl, model } = llamaEndpoint();
+    const registered = workerRegistry.list().map((d) => ({
+      worker: d.id,
+      runtime: d.runtime,
+      models: d.models,
+      enabled: d.enabled,
+    }));
+    let server: Array<{ id: string; object: string }> | null = null;
+    try {
+      const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: Array<{ id: string; object: string }> };
+        server = data.data ?? [];
+      }
+    } catch {
+      // llama-server 未啟動：只回註冊清單
+    }
+    return { baseUrl, defaultModel: model, registered, server };
+  });
+
+  // T033 db export — 匯出全部（或指定）表供 CLI `cp db export`（§36.4 結果保存）。
+  app.get("/api/v1/db/export", async (req) => {
+    const q = req.query as { table?: string };
+    const db = taskManager.db;
+    const tableNames = (
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .all() as Array<{ name: string }>
+    )
+      .map((r) => r.name)
+      .filter((name) => name !== "evidence_fts");
+    const dump: Record<string, Array<Record<string, unknown>>> = {};
+    for (const name of tableNames) {
+      if (q.table && name !== q.table) continue;
+      dump[name] = db.prepare(`SELECT * FROM "${name}"`).all() as Array<Record<string, unknown>>;
+    }
+    return { exportedAt: new Date().toISOString(), tables: dump };
   });
 
   // logs — 真實讀取 DB：attempts / verification_results / reflections（§32 event log）

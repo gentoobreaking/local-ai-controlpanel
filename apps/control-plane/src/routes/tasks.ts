@@ -61,6 +61,37 @@ export async function createTaskRouter(
     return { id, status: taskManager.getRow(id)!.status };
   });
 
+  // T033：手動重試失敗任務（COMPLETE 除外）。重置為 CREATED 並由 runner 重跑完整 pipeline。
+  app.post("/api/v1/tasks/:id/retry", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const task = taskManager.getRow(id);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+    if (task.status === "COMPLETE") {
+      return reply.code(409).send({ error: "已完成任務不可重試", status: task.status });
+    }
+    taskManager.updateStatus(id, "CREATED");
+    runner.start(id);
+    return {
+      id,
+      status: taskManager.getRow(id)!.status,
+      retried: true,
+      progress: `cp task show ${id}`,
+    };
+  });
+
+  // T033：task show 的 patches 區塊（§20 patches 表）。
+  app.get("/api/v1/tasks/:id/patches", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const task = taskManager.getRow(id);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+    const patches = taskManager.db
+      .prepare(
+        "SELECT id, attempt, path, status, workspace_dir, created_at FROM patches WHERE task_id = ? ORDER BY created_at",
+      )
+      .all(id);
+    return { taskId: id, patches };
+  });
+
   app.post("/api/v1/tasks/:id/approve", async (req, reply) => {
     const { id } = req.params as { id: string };
     const task = taskManager.getRow(id);
