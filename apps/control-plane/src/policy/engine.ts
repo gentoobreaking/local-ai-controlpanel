@@ -6,6 +6,7 @@
 import { minimatch } from "minimatch";
 import type { LoadedPolicies } from "./loader.js";
 import type { DefaultPolicy } from "./schemas.js";
+import type { TaskRow } from "../task/types.js";
 import type {
   ArtifactDecision,
   EscalationDecision,
@@ -16,13 +17,27 @@ import type {
   TaskPolicyDecision,
   ToolDecision,
   ToolRequest,
+  CloudModelConfig,
 } from "./types.js";
+import { ExecutionStrategyEngine } from "./strategy-engine.js";
 
 export class PolicyEngine {
+  private readonly strategyEngine: ExecutionStrategyEngine;
+
   constructor(
     private readonly policies: LoadedPolicies,
-    private readonly opts: { enabled?: boolean } = {},
-  ) {}
+    private readonly opts: { enabled?: boolean; phase?: number; allowCloud?: boolean } = {},
+  ) {
+    this.strategyEngine = new ExecutionStrategyEngine({
+      phase: opts.phase ?? 1,
+      allowCloud: opts.allowCloud ?? false,
+      defaultCloudModels: {
+        reviewer: "claude-3.5-sonnet",
+        planner: "claude-3.5-sonnet",
+        executor: "gpt-4o",
+      },
+    });
+  }
 
   get enabled(): boolean {
     return this.opts.enabled ?? true;
@@ -131,16 +146,42 @@ export class PolicyEngine {
   }
 
   /**
-   * evaluateExecution（§10 / §24）：Phase 1–5 強制 local_only。
-   * allow_cloud 為 true → throw（程式層硬限制，非 prompt）。
+   * evaluateExecution（§10 / §24 / §25）：Phase 1–5 強制 local_only。
+   * Phase 9+ 依 task 分析與歷史決定 tier（local / hybrid / cloud）。
+   * allow_cloud 為 true 且 Phase < 9 → throw（程式層硬限制，非 prompt）。
    */
-  evaluateExecution(): ExecutionStrategy {
+  evaluateExecution(analysis?: TaskAnalysis): ExecutionStrategy {
     const ex = this.policies.defaultPolicy.execution;
-    if (ex.allow_cloud === true) {
-      throw new Error(
-        "Phase 1–5 硬限制（§24）：execution.allow_cloud 必須為 false",
-      );
+
+    // Phase 1–5：硬性 local_only（§24 / §38）
+    const phase = this.strategyEngine["opts"].phase;
+    if (phase <= 5) {
+      if (ex.allow_cloud === true) {
+        throw new Error(
+          "Phase 1–5 硬限制（§24）：execution.allow_cloud 必須為 false",
+        );
+      }
+      return this.localOnlyStrategy(ex);
     }
+
+    // Phase 6–8：local_only（可選啟用 MCP/ACP，但不上雲）
+    if (phase >= 6 && phase <= 8) {
+      return this.localOnlyStrategy(ex);
+    }
+
+    // Phase 9+：使用 Strategy Engine 決定
+    if (!analysis) {
+      // 無分析時回傳預設 local
+      return this.localOnlyStrategy(ex);
+    }
+
+    // 取得本地失敗歷史（簡化：從 DB 讀取，這裡先回傳空）
+    const localHistory: Array<{ success: boolean; classification?: string }> = [];
+
+    return this.strategyEngine.selectStrategy(analysis, localHistory);
+  }
+
+  private localOnlyStrategy(ex: DefaultPolicy["execution"]): ExecutionStrategy {
     return {
       strategy: "local_only",
       tier: "local",
@@ -218,12 +259,39 @@ export class PolicyEngine {
   }
 
   /**
-   * evaluateEscalation：型別預留。Phase 1–5 一律 NOT_SUPPORTED（§25）。
+   * evaluateEscalation（§25 Phase 9）：判斷是否觸發 Cloud Escalation。
+   * Phase 1–8：NOT_SUPPORTED
+   * Phase 9+：依嘗試次數、失敗分類、策略引擎決定
    */
-  evaluateEscalation(): EscalationDecision {
-    return {
-      type: "NOT_SUPPORTED",
-      reason: "Phase 1–5 escalation 停用（§25）；Phase 9 才啟用",
-    };
+  evaluateEscalation(context?: {
+    attempt: number;
+    failureClassification?: string;
+    localHistory?: Array<{ success: boolean; classification?: string }>;
+    analysis?: TaskAnalysis;
+  }): EscalationDecision {
+    if (!context) {
+      return {
+        type: "NOT_SUPPORTED",
+        reason: "缺少 escalation 上下文",
+      };
+    }
+    return this.strategyEngine.canEscalate({
+      task: { id: "unknown", status: "IMPLEMENTING" } as any,
+      attempt: context.attempt,
+      failureClassification: context.failureClassification,
+      localHistory: context.localHistory ?? [],
+      analysis: context.analysis ?? { complexity: "medium", risk: "medium" } as any,
+    });
+  }
+
+  /**
+   * buildCloudRequest（§25）：建構 Cloud Request（Reviewer/Planner/Executor）。
+   */
+  buildCloudRequest(
+    task: TaskRow,
+    mode: "reviewer" | "planner" | "executor",
+    context?: { patch?: string; errorOutput?: string; plan?: string },
+  ): { prompt: string; model: string; maxTokens: number } {
+    return this.strategyEngine.buildCloudRequest(task, mode, context);
   }
 }

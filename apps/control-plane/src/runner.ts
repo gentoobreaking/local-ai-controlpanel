@@ -14,7 +14,7 @@ import type { TaskRow, TaskStatus } from "./task/types.js";
 import { classify, canRetry } from "./reflection/engine.js";
 import type { EvidenceDecision } from "./evidence/gate.js";
 import { validateEvidenceGate } from "./evidence/gate.js";
-import type { ResearchSummary } from "./policy/types.js";
+import type { ResearchSummary, TaskAnalysis } from "./policy/types.js";
 import type { WorkerRegistry } from "./worker/registry.js";
 import { WorkerRouter } from "./worker/registry.js";
 import type { WorkerRequest, WorkerResult } from "./worker/types.js";
@@ -234,6 +234,22 @@ export function createRunner(
     }
   }
 
+  /** 簡單的 task 分析建構器（供 Phase 9+ evaluateExecution 使用）。 */
+  function buildTaskAnalysis(task: TaskRow): TaskAnalysis {
+    // 這裡簡化：實際應由 analyzer 產生
+    return {
+      languages: ["typescript", "python", "go"].filter((l) =>
+        task.request.toLowerCase().includes(l),
+      ),
+      frameworks: [],
+      dependencies: [],
+      complexity: task.risk === "high" ? "high" : task.risk === "low" ? "low" : "medium",
+      risk: task.risk ?? "medium",
+      researchRequired: true,
+      researchReasons: ["unknown_dependency"],
+    };
+  }
+
   /**
    * T021：IMPLEMENTING → Worker Interface 選派 Pi Worker → execute → patch。
    * llama.cpp 未啟動時 PiWorker 自動走 stub 快速路徑（§16 備註），
@@ -242,7 +258,9 @@ export function createRunner(
   async function runWorker(task: TaskRow): Promise<void> {
     if (!router || !workerRegistry) return;
     try {
-      const strategy = policyEngine.evaluateExecution();
+      // 建立簡單的 task 分析（Phase 9+ 使用）
+      const analysis = buildTaskAnalysis(task);
+      const strategy = policyEngine.evaluateExecution(analysis);
       const { worker, descriptor } = router.select(task, strategy);
       // lazy initialize（PiWorker 探測 llama.cpp；同一 worker 只 init 一次）
       if (!initializedWorkers.has(descriptor.id)) {

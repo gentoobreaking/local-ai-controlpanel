@@ -13,6 +13,17 @@ export interface ProtocolConfig {
   acp: { enabled: boolean };
 }
 
+export interface ExecutionConfig {
+  /** §25 Phase 設定：1-5 | 6 | 7 | 8 | 9 | 10 | 11（預設 1，Phase 1–5 local_only） */
+  phase: number;
+  /** 是否允許 Cloud（Phase 9+ 才生效） */
+  allowCloud: boolean;
+  /** Cloud 成本上限（USD/天） */
+  maxDailyCostUsd?: number;
+  /** Cloud token 上限（per task） */
+  maxTokensPerTask?: number;
+}
+
 export interface AppConfig {
   host: string;
   port: number;
@@ -21,6 +32,8 @@ export interface AppConfig {
   policiesDir: string;
   /** §18/§19：協議層設定（Phase 1–5 預設 disabled）。 */
   protocol: ProtocolConfig;
+  /** §25：Execution 階段設定（Phase 9+ 啟用 Hybrid/Cloud）。 */
+  execution: ExecutionConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -37,6 +50,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       acp: {
         enabled: env.CP_ACP_ENABLED === "1" || env.CP_ACP_ENABLED === "true",
       },
+    },
+    execution: {
+      phase: Number(env.CP_PHASE ?? 1),
+      allowCloud: env.CP_ALLOW_CLOUD === "1" || env.CP_ALLOW_CLOUD === "true",
+      maxDailyCostUsd: env.CP_MAX_DAILY_COST_USD ? Number(env.CP_MAX_DAILY_COST_USD) : undefined,
+      maxTokensPerTask: env.CP_MAX_TOKENS_PER_TASK ? Number(env.CP_MAX_TOKENS_PER_TASK) : undefined,
     },
   };
 }

@@ -56,7 +56,10 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const taskManager = createTaskManager(db);
   const bus = createTaskBus();
   const policies = loadPolicies(config.policiesDir);
-  const policyEngine = new PolicyEngine(policies);
+  const policyEngine = new PolicyEngine(policies, {
+    phase: config.execution.phase,
+    allowCloud: config.execution.allowCloud,
+  });
   const workerRegistry = createDefaultWorkerRegistry({
     // llama 模式生成超時可經由 env 覆寫（預設 5 分鐘，7B CPU 生成 patch 需 30–120s）
     piWorker: new PiWorker({

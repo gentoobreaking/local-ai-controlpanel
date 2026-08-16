@@ -1,8 +1,8 @@
 /**
- * T030 Baseline Runner — Baseline Groups A–F 完整跑分。
+ * T030 Baseline Runner — Baseline Groups A–K 完整跑分。
  *
  * 用法：
- *   npx tsx benchmark/runners/baseline-runner.ts --baseline A|B|C|D|E|F|all
+ *   npx tsx benchmark/runners/baseline-runner.ts --baseline A|B|C|D|E|F|G|H|I|J|K|all
  *                          [--language python] [--max-tasks N] [--mode llama|stub] [--keep]
  *
  * Baseline 設定矩陣：
@@ -14,6 +14,11 @@
  * | D     | ❌     | ❌       | ✅           | Verification Only |
  * | E     | ❌     | ✅       | ✅           | Research + Verification |
  * | F     | ✅     | ✅       | ✅           | Full CP (已驗證) |
+ * | G     | ✅     | ✅       | ✅           | Phase 9 Local Only (baseline for Hybrid) |
+ * | H     | ✅     | ✅       | ✅           | Reviewer First (Hybrid) |
+ * | I     | ✅     | ✅       | ✅           | Planner First (Hybrid) |
+ * | J     | ✅     | ✅       | ✅           | Executor First (Hybrid) |
+ * | K     | ✅     | ✅       | ✅           | Cloud Only (Hybrid) |
  */
 
 import { mkdtempSync, cpSync, existsSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
@@ -53,22 +58,27 @@ interface BaselineConfig {
 }
 
 const BASELINES: Record<string, BaselineConfig> = {
-  A: { name: "Raw 9B", policyEnabled: false, researchEnabled: false, verificationEnabled: false },
-  B: { name: "Research Only", policyEnabled: false, researchEnabled: true, verificationEnabled: false },
-  C: { name: "Policy Only", policyEnabled: true, researchEnabled: false, verificationEnabled: false },
-  D: { name: "Verification Only", policyEnabled: false, researchEnabled: false, verificationEnabled: true },
-  E: { name: "Research + Verification", policyEnabled: false, researchEnabled: true, verificationEnabled: true },
-  F: { name: "Full CP", policyEnabled: true, researchEnabled: true, verificationEnabled: true },
+  A: { name: "Raw 9B", policyEnabled: false, researchEnabled: false, verificationEnabled: false, phase: 1, allowCloud: false },
+  B: { name: "Research Only", policyEnabled: false, researchEnabled: true, verificationEnabled: false, phase: 1, allowCloud: false },
+  C: { name: "Policy Only", policyEnabled: true, researchEnabled: false, verificationEnabled: false, phase: 1, allowCloud: false },
+  D: { name: "Verification Only", policyEnabled: false, researchEnabled: false, verificationEnabled: true, phase: 1, allowCloud: false },
+  E: { name: "Research + Verification", policyEnabled: false, researchEnabled: true, verificationEnabled: true, phase: 1, allowCloud: false },
+  F: { name: "Full CP", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 1, allowCloud: false },
+  // Phase 9+ Hybrid Baselines (T035)
+  G: { name: "Phase 9 Local Only", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 9, allowCloud: false },
+  H: { name: "Reviewer First (Hybrid)", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 9, allowCloud: true },
+  I: { name: "Planner First (Hybrid)", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 9, allowCloud: true },
+  J: { name: "Executor First (Hybrid)", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 9, allowCloud: true },
+  K: { name: "Cloud Only (Hybrid)", policyEnabled: true, researchEnabled: true, verificationEnabled: true, phase: 9, allowCloud: true },
 };
 
-interface TaskSpec {
-  id: string;
-  language: string;
-  level: string;
-  lib: string;
-  request: string;
-  research_facts: string;
-  official_doc: string;
+interface BaselineConfig {
+  name: string;
+  policyEnabled: boolean;
+  researchEnabled: boolean;
+  verificationEnabled: boolean;
+  phase: number;
+  allowCloud: boolean;
 }
 
 interface TasksData {
@@ -277,9 +287,8 @@ async function main() {
         const tm = new TaskManager(db);
         const bus = createTaskBus();
         const policies = loadPolicies(POLICIES_DIR);
-        const engine = new PolicyEngine(policies, { enabled: config.policyEnabled });
 
-        // Worker (with RAG retriever)
+// Worker (with RAG retriever)
         const worker = new PiWorker({
           allowStub: !useLlama,
           pingTimeoutMs: 3_000,
@@ -293,6 +302,7 @@ async function main() {
           worker,
         );
 
+        const engine = new PolicyEngine(policies, { enabled: config.policyEnabled, phase: config.phase, allowCloud: config.allowCloud });
         const runner = createRunner(tm, bus, engine, { workerRegistry: registry });
         const sandboxRegistry = createDefaultRegistry({ seatbeltProfile: join(REPO_ROOT, "sandbox-profiles/verification-default.sb") });
         const verification = new VerificationEngine({
