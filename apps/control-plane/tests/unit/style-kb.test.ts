@@ -55,8 +55,10 @@ test("StyleKnowledgeBase：upsert + search 基本", () => {
   assert.equal(kb.count(), 1);
   const res = kb.search({ language: "python", errorType: "F401", snippet: "import requests", topK: 5 });
   assert.equal(res.length, 1);
-  assert.equal(res[0].id, c.id);
-  assert.equal(res[0].errorType, "F401");
+  const r0 = res[0];
+  assert.ok(r0);
+  assert.equal(r0.id, c.id);
+  assert.equal(r0.errorType, "F401");
 });
 
 test("StyleKnowledgeBase：語言過濾", () => {
@@ -67,6 +69,8 @@ test("StyleKnowledgeBase：語言過濾", () => {
   const go = kb.search({ language: "go", topK: 10 });
   assert.equal(py.length, 1, "僅找到 python");
   assert.equal(go.length, 1, "僅找到 go");
+  assert.ok(py[0]);
+  assert.ok(go[0]);
 });
 
 test("StyleKnowledgeBase：錯誤類型過濾", () => {
@@ -77,8 +81,12 @@ test("StyleKnowledgeBase：錯誤類型過濾", () => {
   const e302 = kb.search({ language: "python", errorType: "E302", topK: 10 });
   assert.equal(f401.length, 1);
   assert.equal(e302.length, 1);
-  assert.equal(f401[0].errorType, "F401");
-  assert.equal(e302[0].errorType, "E302");
+  const f0 = f401[0];
+  const e0 = e302[0];
+  assert.ok(f0);
+  assert.ok(e0);
+  assert.equal(f0.errorType, "F401");
+  assert.equal(e0.errorType, "E302");
 });
 
 test("StyleKnowledgeBase：最近 30 天過濾", () => {
@@ -88,7 +96,9 @@ test("StyleKnowledgeBase：最近 30 天過濾", () => {
   kb.upsert(makeCase({ id: "new", language: "python", errorType: "F401" }));
   const recent = kb.search({ language: "python", errorType: "F401", maxAgeDays: 30, topK: 10 });
   assert.equal(recent.length, 1, "僅保留 30 天內");
-  assert.equal(recent[0].id, "new");
+  const r0 = recent[0];
+  assert.ok(r0);
+  assert.equal(r0.id, "new");
 });
 
 test("StyleKnowledgeBase：few-shot 案例永不進入檢索", () => {
@@ -97,7 +107,9 @@ test("StyleKnowledgeBase：few-shot 案例永不進入檢索", () => {
   kb.upsert(makeCase({ id: "norm", language: "python", errorType: "F401" }));
   const res = kb.search({ language: "python", errorType: "F401", topK: 10 });
   assert.equal(res.length, 1, "few-shot 已排除");
-  assert.equal(res[0].id, "norm");
+  const r0 = res[0];
+  assert.ok(r0);
+  assert.equal(r0.id, "norm");
 });
 
 test("detectLanguageFromContract：以 allowed_files 副檔名計數", () => {
@@ -135,6 +147,8 @@ test("createStyleKbRetriever：檢索函式語言解析 + 錯誤類型", () => {
   };
   const res = retriever(c);
   assert.ok(res.length >= 1);
-  assert.equal(res[0].language, "python");
-  assert.equal(res[0].errorType, "F401");
+  const r0 = res[0];
+  assert.ok(r0);
+  assert.equal(r0.language, "python");
+  assert.equal(r0.errorType, "F401");
 });
