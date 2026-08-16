@@ -19,6 +19,8 @@ import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.
 import { VerificationEngine } from "./verification/engine.js";
 import { createDefaultWorkerRegistry, type WorkerRegistry } from "./worker/registry.js";
 import { PiWorker } from "./worker/pi-worker.js";
+import { McpServer, registerMcpRoutes } from "./mcp/server.js";
+import { AcpServer, registerAcpRoutes } from "./acp/server.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -114,10 +116,37 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     deps: { taskManager, policies, policyEngine, verificationEngine, workerRegistry },
   });
 
+  // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
+  const mcpServer = config.protocol.mcp.enabled
+    ? new McpServer({
+        policy: policyEngine,
+        sandboxRegistry: registry,
+        workspace: config.protocol.mcp.workspace,
+      })
+    : undefined;
+  const acpServer = config.protocol.acp.enabled
+    ? new AcpServer({ taskManager, runner, bus, policyEngine })
+    : undefined;
+  if (mcpServer) registerMcpRoutes(app, mcpServer);
+  if (acpServer) registerAcpRoutes(app, acpServer);
+
   app.get("/health", async () => ({ status: "ok" }));
 
   return {
     app,
-    deps: { config, db, taskManager, runner, bus, policies, policyEngine, registry, verificationEngine, workerRegistry },
+    deps: {
+      config,
+      db,
+      taskManager,
+      runner,
+      bus,
+      policies,
+      policyEngine,
+      registry,
+      verificationEngine,
+      workerRegistry,
+      mcpServer,
+      acpServer,
+    },
   };
 }

@@ -33,6 +33,10 @@ Worker（§16）:
   cp worker ping            探測 llama.cpp 連線（LLAMA_BASE_URL / LLAMA_MODEL 可覆寫）
   cp worker models          列出可用模型（註冊 + llama-server /v1/models）
 
+協議層（§18 / §19，T034，Phase 6+ 預留）:
+  cp protocol start [--mcp] [--acp] [--port <port>]
+      以 MCP(/mcp) / ACP(/acp) 協議啟用 Control Plane（預設兩者停用）
+
 既有指令（§29，T009 保留）:
   acp task run / status / inspect
   acp research <id> | acp evidence <id> | acp strategy <id> | acp logs <id>

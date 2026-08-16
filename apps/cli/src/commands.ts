@@ -28,6 +28,7 @@ import { runSingle, baselineRun } from "./commands/run.js";
 import { reportGenerate } from "./commands/report.js";
 import { dbExport } from "./commands/db.js";
 import { workerPing, workerModels, workerUsage } from "./commands/worker.js";
+import { protocolStart } from "./commands/protocol.js";
 
 export type { CommandResult } from "./command-types.js";
 
@@ -102,6 +103,9 @@ export async function runCommand(
       case "sandbox":
         if (rest[0] === "check") return await sandboxCheck(ctx.client);
         return helpResult(rest);
+      case "protocol":
+        if (rest[0] === "start") return await protocolStart(ctx, rest.slice(1));
+        return { code: 2, lines: ["用法: cp protocol start [--mcp] [--acp] [--port <port>]（cp --help）"] };
       case "cloud":
         if (rest[0] === "usage") return cloudUsage();
         return helpResult(rest);
