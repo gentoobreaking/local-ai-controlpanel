@@ -124,6 +124,105 @@ ollama list
 
 > 驗證：`curl http://127.0.0.1:8080/health` → `{"status":"ok"}`（llama.cpp）；ollama 檢查 `curl http://127.0.0.1:11434` 回 `Ollama is running`。
 
+## Cloud Provider / Hybrid Execution (T035, Phase 9+)
+
+### Cloud Provider 介面
+
+Control Plane 內建統一的 `CloudProvider` 介面（`apps/control-plane/src/policy/cloud-provider.ts`），支援：
+
+| Provider | 類別 | 預設模型 | 適用場景 |
+|---|---|---|---|
+| **Anthropic** | `AnthropicProvider` | `claude-3.5-sonnet` | Reviewer/Planner（推理強） |
+| **OpenAI** | `OpenAIProvider` | `gpt-4o` | Executor（產出 patch 快） |
+| **Google** | `GeminiProvider` | `gemini-1.5-pro` | 成本敏感 / 大上下文 |
+
+透過 `CloudProviderManager` 統一管理：註冊、可用性檢查、成本追蹤（每日上限）、自動重試。
+
+### 四種 Hybrid Escalation Modes（§25）
+
+| Mode | Key | 流程 | 啟用條件 |
+|---|---|---|---|
+| **Reviewer First** | H | Local 失敗 → Cloud Reviewer 審查 patch → Local 重做 | Local 失敗 ≥ 1 次 |
+| **Planner First** | I | Complex task → Cloud Planner 產生計畫 → Local 實作 | 高複雜度 task |
+| **Executor First** | J | Critical path → Cloud Executor 產出 patch → Local 驗證 | 高風險 + 多次失敗 |
+| **Cloud Only** | K | Full Cloud（Claude/GPT，無 Control Plane） | Phase 11+ 高風險 |
+
+### 環境變數配置（Cloud / Hybrid）
+
+```bash
+# Phase 設定（1-11，預設 1，Phase 9+ 才啟用 Hybrid/Cloud）
+CP_PHASE=9
+
+# 是否允許 Cloud（Phase 9+ 才生效）
+CP_ALLOW_CLOUD=1
+
+# Cloud Provider 選擇：anthropic | openai | gemini
+CP_CLOUD_PROVIDER=anthropic
+
+# Cloud API Keys（任一即可；多 Provider 同時註冊亦可）
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+
+# 成本控制
+CP_MAX_DAILY_COST_USD=50.0       # 每日上限（USD）
+CP_MAX_TOKENS_PER_TASK=100000    # 單任務 token 上限
+
+# 可選：自訂 Cloud 模型（預設已內建）
+CP_CLOUD_MODEL_REVIEWER=claude-3.5-sonnet
+CP_CLOUD_MODEL_PLANNER=claude-3.5-sonnet
+CP_CLOUD_MODEL_EXECUTOR=gpt-4o
+```
+
+### OpenCode Zen API Key 支援
+
+`OpenCodeProvider` 可直接使用 OpenCode Zen 的兼容端點（OpenAI-compatible）：
+
+```bash
+# 方式 1：使用 OpenAI Provider + 自訂 baseUrl
+OPENAI_API_KEY=<opencode_zen_key>
+OPENAI_BASE_URL=https://api.opencode.ai/v1
+CP_CLOUD_PROVIDER=openai
+
+# 方式 2：直接用 OpenCode 專用 Provider（若未來新增）
+# OPCODE_API_KEY=<key>
+```
+
+### 模型配置位置
+
+| 配置層級 | 檔案/位置 | 說明 |
+|---|---|---|
+| **Pi Worker 本地模型** | `policies/default.yaml` → `execution.local.model` | 本地 Worker 預設模型（預設 `qwen2.5-coder:7b`） |
+| **Pi Worker 本地 Worker ID** | `policies/default.yaml` → `execution.local.worker` | Worker Registry 查找用 |
+| **Cloud Reviewer 模型** | `CP_CLOUD_MODEL_REVIEWER` / `policies/default.yaml → execution.cloudModels.reviewer` | Cloud Reviewer 模式用 |
+| **Cloud Planner 模型** | `CP_CLOUD_MODEL_PLANNER` / `policies/default.yaml → execution.cloudModels.planner` | Cloud Planner 模式用 |
+| **Cloud Executor 模型** | `CP_CLOUD_MODEL_EXECUTOR` / `policies/default.yaml → execution.cloudModels.executor` | Cloud Executor 模式用 |
+| **RAG 風格知識庫模型** | `policies/default.yaml` → `rag.model` | Style KB retriever 用 |
+
+> 環境變數優先於 policy YAML；`policies/default.yaml` 為基準配置。
+
+### Hybrid Baseline 執行（T030 + T035）
+
+```bash
+# Phase 9 Local Only（Baseline G）
+CP_PHASE=9 CP_ALLOW_CLOUD=0 pnpm cp:dev &
+python3 scripts/run_baseline.py --baseline G --mode llama --max-tasks 10
+
+# Hybrid Reviewer First（Baseline H）
+CP_PHASE=9 CP_ALLOW_CLOUD=1 ANTHROPIC_API_KEY=sk-... python3 scripts/run_baseline.py --baseline H --mode llama --max-tasks 5
+
+# Hybrid Planner First（Baseline I）
+CP_PHASE=9 CP_ALLOW_CLOUD=1 ANTHROPIC_API_KEY=sk-... python3 scripts/run_baseline.py --baseline I --mode llama --max-tasks 5
+
+# Hybrid Executor First（Baseline J）
+CP_PHASE=9 CP_ALLOW_CLOUD=1 OPENAI_API_KEY=sk-... python3 scripts/run_baseline.py --baseline J --mode llama --max-tasks 5
+
+# Cloud Only（Baseline K）
+CP_PHASE=9 CP_ALLOW_CLOUD=1 ANTHROPIC_API_KEY=sk-... python3 scripts/run_baseline.py --baseline K --mode llama --max-tasks 5
+```
+
+---
+
 ## 任務進度
 
 | 任務 | 內容 | 狀態 |
