@@ -80,7 +80,7 @@ export class MemoryRetriever {
   }
 
   private initSchema(): void {
-    // 使用現有 project_memory table，確保有 tags 欄位
+    // 使用現有 project_memory table，確保有 tags 和 vector 欄位
     this.db.exec(`
 CREATE TABLE IF NOT EXISTS project_memory (
   id TEXT PRIMARY KEY,
@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS project_memory (
   key TEXT NOT NULL,
   value TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
+  vector BLOB,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
