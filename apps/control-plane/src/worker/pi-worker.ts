@@ -460,18 +460,27 @@ export class PiWorker implements CodingWorker {
     };
   }
 
-  /** stub patch：以 allowed_files 內第一個實際存在的檔案為目標（git-style header）。 */
+/** stub patch：建立一個新的實作檔案（在 src/ 下），避開 tests/test_*.py 的 readonly 限制。 */
   private buildStubPatch(req: WorkerRequest): string {
-    const target = this.stubTargetFile(req.executionPolicy.allowedFiles) ?? "CHANGES.md";
+    const taskId = req.task.id;
+    const request = req.task.request.slice(0, 60);
+    const target = `src/${taskId.toLowerCase().replace(/[^a-z0-9]/g, "_")}_stub.py`;
+    const content = [
+      `"""${taskId}: ${request}"""`,
+      `def stub_function():`,
+      `    """Stub worker generated implementation (llama.cpp not running)."""`,
+      `    return True`,
+      ``,
+    ].join("\n");
+    const contentLines = content.split("\n").length;
     const lines = [
       `diff --git a/${target} b/${target}`,
-      `--- a/${target}`,
+      `new file mode 100644`,
+      `index 0000000..8e66654`,
+      `--- /dev/null`,
       `+++ b/${target}`,
-      `@@ -0,0 +1,4 @@`,
-      `+# ${req.task.id} — ${req.task.request.slice(0, 80)}`,
-      `+# stub worker patch（llama.cpp 未啟動）`,
-      `+#`,
-      `+# placeholder change`,
+      `@@ -0,0 +1,${contentLines} @@`,
+      content.split("\n").map((l) => `+${l}`).join("\n"),
     ];
     return lines.join("\n") + "\n";
   }
@@ -504,8 +513,8 @@ export class PiWorker implements CodingWorker {
   }
 
   private stubChangedFiles(req: WorkerRequest): string[] {
-    const target = req.executionPolicy.allowedFiles[0];
-    return target ? [target] : [];
+    const taskId = req.task.id;
+    return [`src/${taskId.toLowerCase().replace(/[^a-z0-9]/g, "_")}_stub.py`];
   }
 
   // ── 工具 ──────────────────────────────────────────────────────────────

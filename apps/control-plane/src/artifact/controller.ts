@@ -210,9 +210,9 @@ export async function normalizeExistingFiles(
     const hasHeader = /^diff --git /.test(section);
     const plusLine = /^\+\+\+ (?:b\/)?(\S+)/m.exec(section);
     const isNewFile = /\/dev\/null/.test(section) || /new file mode/.test(section);
-    const target = hasHeader
-      ? /^diff --git a\/?(\S+) b\/?(\S+)/m.exec(section)?.[2]
-      : plusLine?.[1];
+    // 支援 canonical diff 的 /dev/null 格式：先試標準 header，失敗則從 +++ 行取得
+    const headerMatch = hasHeader ? /^diff --git a\/?(\S+) b\/?(\S+)/m.exec(section) : null;
+    const target = (headerMatch?.[2] ?? plusLine?.[1])?.trim();
     const exists = Boolean(target && existsSync(join(workspaceDir, target)));
 
     // 需重新生成的情形：宣告 new 但已存在（replace）／目標不存在（create）。
@@ -468,12 +468,16 @@ export function createArtifactController(deps: ArtifactControllerDeps) {
         const oExists = existsSync(orig);
         const cExists = existsSync(cand);
         if (!oExists && !cExists) continue;
-        // 在暫存 dir 放同名副本，避免 --no-index 對絕對路徑的檔名竄改
         const cmpDir = join(scratch, ".acp-cmp");
         mkdirSync(cmpDir, { recursive: true });
         const oName = join(cmpDir, "orig.bin");
         const cName = join(cmpDir, "cand.bin");
-        if (oExists) cpSync(orig, oName);
+        if (oExists) {
+          cpSync(orig, oName);
+        } else {
+          // 新增檔案：建立空的 orig.bin 供 git diff --no-index 比較
+          writeFileSync(oName, "");
+        }
         if (cExists) cpSync(cand, cName);
         const res = await execFileAsync(
           "git",
@@ -484,7 +488,6 @@ export function createArtifactController(deps: ArtifactControllerDeps) {
         rmSync(cName, { force: true });
         let raw = (res.stdout ?? res.stderr ?? "") as string;
         if (!raw.trim()) continue;
-        // 正規化 header：→ a/f b/f（新增 → /dev/null b/f；刪除 → a/f /dev/null）
         const created = !oExists && cExists;
         const deleted = oExists && !cExists;
         raw = raw
