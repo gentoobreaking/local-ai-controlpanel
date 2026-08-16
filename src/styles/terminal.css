@@ -450,3 +450,122 @@ body {
   border-color: var(--accent);
   opacity: 0.9;
 }
+
+/* ── InputBar History Dropdown ────────────────────────── */
+
+.inputbar-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.inputbar-history {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.inputbar-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+}
+
+.inputbar-history-item:last-child {
+  border-bottom: none;
+}
+
+.inputbar-history-item:hover,
+.inputbar-history-item.active {
+  background: var(--bg-active);
+}
+
+.inputbar-history-idx {
+  color: var(--fg-dim);
+  font-size: 11px;
+  min-width: 24px;
+  text-align: right;
+}
+
+.inputbar-history-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Zoom Controls ─────────────────────────────────────── */
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+}
+
+.zoom-btn {
+  padding: 4px 8px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-btn:hover {
+  background: var(--bg);
+  border-color: var(--fg-dim);
+}
+
+.zoom-btn:active {
+  background: var(--bg);
+}
+
+.zoom-level {
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* ── Reconnection Status ───────────────────────────────── */
+
+.conn-reconnecting {
+  color: var(--warn);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Stream Header Connection Status ───────────────────── */
+
+.conn-reconnecting {
+  color: var(--warn);
+}
+
+.conn-bad {
+  color: var(--danger);
+}

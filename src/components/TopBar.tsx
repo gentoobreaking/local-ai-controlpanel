@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getSandboxStatus, listWorkers, type TaskSummary, type WorkerInfo } from "../api/client";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -16,11 +16,43 @@ interface Props {
 export default function TopBar({ selectedTask, sandboxStatus }: Props) {
   const [sandbox, setSandbox] = useState<Record<string, boolean>>({});
   const [workers, setWorkers] = useState<WorkerInfo[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const fetchWorkers = useCallback(async () => {
+    try {
+      const data = await listWorkers();
+      setWorkers(data);
+    } catch {
+      setWorkers([]);
+    }
+  }, []);
+
+  const fetchSandbox = useCallback(async () => {
+    try {
+      const data = await getSandboxStatus();
+      setSandbox(data);
+    } catch {
+      setSandbox({});
+    }
+  }, []);
 
   // 首次掛載時探測（非 task 綁定的全域狀態）
   useEffect(() => {
-    getSandboxStatus().then(setSandbox).catch(() => setSandbox({}));
-    listWorkers().then(setWorkers).catch(() => setWorkers([]));
+    fetchSandbox();
+    fetchWorkers();
+  }, [fetchSandbox, fetchWorkers]);
+
+  // 定期刷新（每 10 秒）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRefreshTrigger((t) => t + 1);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 任務切換時也刷新
+  useEffect(() => {
+    setRefreshTrigger((t) => t + 1);
   }, []);
 
   const backendStatus = sandboxStatus ?? sandbox;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import TopBar from "./components/TopBar";
 import TaskList from "./components/TaskList";
 import TaskStream from "./components/TaskStream";
@@ -40,10 +40,16 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [approvePending, setApprovePending] = useState(false);
   const [sandboxCheck, setSandboxCheck] = useState<SandboxCheckResult | null>(null);
+  const [zoom, setZoom] = useState(1.0);
 
   const refreshTasks = useCallback(() => {
     listTasks().then(setTasks).catch(() => setTasks([]));
   }, []);
+
+  // Zoom controls
+  const zoomIn = useCallback(() => setZoom((z) => Math.min(2.0, z + 0.1)), []);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(0.5, z - 0.1)), []);
+  const zoomReset = useCallback(() => setZoom(1.0), []);
 
   useEffect(() => {
     refreshTasks();
@@ -158,7 +164,7 @@ export default function App() {
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
 
   return (
-    <div className="app">
+    <div className="app" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
       <TopBar
         selectedTask={selectedTask}
         sandboxStatus={sandboxCheck?.statuses ?? undefined}
@@ -187,6 +193,12 @@ export default function App() {
         onCancel={() => handleCommand({ kind: "cancel" })}
         onOpenPalette={() => setPaletteOpen(true)}
       />
+      <div className="zoom-controls">
+        <button className="zoom-btn" onClick={zoomOut} title="Zoom Out (Ctrl+-)" aria-label="Zoom Out">−</button>
+        <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+        <button className="zoom-btn" onClick={zoomIn} title="Zoom In (Ctrl+=)" aria-label="Zoom In">+</button>
+        <button className="zoom-btn" onClick={zoomReset} title="Reset Zoom (Ctrl+0)" aria-label="Reset Zoom">⟲</button>
+      </div>
       {paletteOpen && (
         <CommandPalette
           tasks={tasks}

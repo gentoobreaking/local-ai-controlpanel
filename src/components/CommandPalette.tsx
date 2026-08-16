@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { TaskSummary } from "../api/client";
 import type { Command } from "../App";
 
@@ -54,9 +54,39 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const run = (entry: Entry) => {
+  // 防止鍵盤事件衝突
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && entries[0]) {
+      e.preventDefault();
+      const entry = entries[cursor] ?? entries[0]!;
+      onCommand(entry.command);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCursor((c) => Math.min(c + 1, entries.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCursor((c) => Math.max(c - 1, 0));
+    } else if (e.key === "Escape") {
+      onClose();
+    }
+  }, [cursor, entries, onCommand, onClose]);
+
+  // 確保點擊能正確觸發命令
+  const run = useCallback((entry: Entry) => {
     onCommand(entry.command);
-  };
+  }, [onCommand]);
+
+  // 確保 entries 變化時 cursor 重置
+  useEffect(() => {
+    setCursor(0);
+  }, [query, entries.length]);
+
+  // 確保 entries 更新時 cursor 在範圍內
+  useEffect(() => {
+    if (cursor >= entries.length) {
+      setCursor(Math.max(0, entries.length - 1));
+    }
+  }, [entries.length]);
 
   return (
     <div className="palette-overlay" onClick={onClose}>
@@ -69,13 +99,17 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && entries[0]) {
-              run(entries[cursor] ?? entries[0]!);
+              e.preventDefault();
+              const entry = entries[cursor] ?? entries[0]!;
+              onCommand(entry.command);
             } else if (e.key === "ArrowDown") {
               e.preventDefault();
               setCursor((c) => Math.min(c + 1, entries.length - 1));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
               setCursor((c) => Math.max(c - 1, 0));
+            } else if (e.key === "Escape") {
+              onClose();
             }
           }}
         />
@@ -84,7 +118,7 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
             <li
               key={e.id}
               className={`palette-item ${i === cursor ? "palette-item-active" : ""}`}
-              onClick={() => run(e)}
+              onClick={() => onCommand(e.command)}
               onMouseEnter={() => setCursor(i)}
             >
               <span className="palette-label">{e.label}</span>
