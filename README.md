@@ -43,6 +43,37 @@ pnpm tauri dev      # Desktop UI（需 Control Plane 於 127.0.0.1:3001）
 pnpm tauri build    # 打包 .app/.dmg
 ```
 
+## acpctl 統一控制腳本（推薦）
+
+```bash
+# 常用指令
+./scripts/acpctl.sh cp:start           # 啟動 Control Plane（自動檢查 llama.cpp、等待 health）
+./scripts/acpctl.sh cp:status          # 檢查 CP 狀態 + health endpoint
+./scripts/acpctl.sh cp:stop            # 停止 CP
+./scripts/acpctl.sh cp:logs            # 即時查看日誌
+
+./scripts/acpctl.sh baseline:run --baseline A --mode stub --max-tasks 10
+./scripts/acpctl.sh baseline:run --baseline H --mode llama --max-tasks 5
+./scripts/acpctl.sh baseline:report    # 生成 benchmark 報告
+./scripts/acpctl.sh baseline:gate      # 執行 Architecture Validation Gate
+
+./scripts/acpctl.sh cloud:check        # 檢查 3 大 Provider 可用性
+./scripts/acpctl.sh cloud:cost         # 顯示今日成本與上限
+
+./scripts/acpctl.sh mcp:start          # 啟用 MCP 協議
+./scripts/acpctl.sh acp:start          # 啟用 ACP 協議
+
+./scripts/acpctl.sh test               # typecheck + 全測試
+./scripts/acpctl.sh typecheck          # 僅 typecheck
+./scripts/acpctl.sh env:check          # 檢查必選/可選環境變數（✅/❌/⚠）
+./scripts/acpctl.sh env:example        # 顯示 .env.example 內容
+
+# 查看完整幫助
+./scripts/acpctl.sh help
+```
+
+> 使用前請先 `cp .env.example .env` 並根據需要修改，或直接 export 環境變數。
+
 ## macOS 打包（.app / .dmg）
 
 一鍵腳本（推薦）：
