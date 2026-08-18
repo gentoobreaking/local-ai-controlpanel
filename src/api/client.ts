@@ -229,6 +229,66 @@ export async function researchGet(
   return res.json();
 }
 
+export interface EvidenceSource {
+  type: "documentation" | "code_execution" | "external_api" | "memory" | "style_kb";
+  id: string;
+  title: string;
+  url?: string;
+  snippet: string;
+  fullContent?: string;
+  credibility: number;
+  relevance: number;
+  timeliness: number;
+  score: number;
+  accessedAt: string;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EvidenceQuery {
+  taskId: string;
+  query: string;
+  types?: EvidenceSource["type"][];
+  minScore?: number;
+  maxResults?: number;
+}
+
+export interface EvidenceResult {
+  taskId: string;
+  query: string;
+  evidence: EvidenceSource[];
+  totalScore: number;
+  passed: boolean;
+  timestamp: string;
+}
+
+/** POST /api/v1/evidence（§13）— 收集證據 */
+export async function collectEvidence(query: EvidenceQuery): Promise<EvidenceResult> {
+  const res = await f(`${cpBaseUrl}/api/v1/evidence`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(query),
+  });
+  if (!res.ok) throw new Error(`collectEvidence ${res.status}`);
+  return res.json();
+}
+
+/** GET /api/v1/evidence/:taskId?q=...（§13）— 便捷查詢 */
+export async function collectEvidenceGet(
+  taskId: string,
+  opts: { query: string; types?: EvidenceSource["type"][]; minScore?: number; maxResults?: number },
+): Promise<EvidenceResult> {
+  const params = new URLSearchParams();
+  params.set("query", opts.query);
+  if (opts.types) params.set("types", opts.types.join(","));
+  if (opts.minScore !== undefined) params.set("minScore", String(opts.minScore));
+  if (opts.maxResults) params.set("maxResults", String(opts.maxResults));
+
+  const res = await f(`${cpBaseUrl}/api/v1/evidence/${taskId}?${params.toString()}`);
+  if (!res.ok) throw new Error(`collectEvidenceGet ${res.status}`);
+  return res.json();
+}
+
 export type SandboxStatus = Record<string, boolean>;
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {
