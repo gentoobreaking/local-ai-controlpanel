@@ -11,6 +11,15 @@ export interface ProtocolConfig {
   mcp: { enabled: boolean; workspace: string };
   /** §19 ACP-Protocol Layer 開關（Phase 6+ 啟用；預設關閉） */
   acp: { enabled: boolean };
+  /** MCP Server 多層備援設定 */
+  mcpServers: {
+    /** Primary: tw-quant-mcp (本機 Go 執行檔) */
+    twQuant: { enabled: boolean; path: string };
+    /** Backup: yfinance-mcp (PyPI) */
+    yfinance: { enabled: boolean };
+    /** 2nd Backup: FinMind-MCP (PyPI，需 FINMIND_TOKEN) */
+    finmind: { enabled: boolean };
+  };
 }
 
 export interface ExecutionConfig {
@@ -49,6 +58,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       },
       acp: {
         enabled: env.CP_ACP_ENABLED === "1" || env.CP_ACP_ENABLED === "true",
+      },
+      mcpServers: {
+        twQuant: {
+          enabled: env.CP_MCP_TW_QUANT_ENABLED !== "0" && env.CP_MCP_TW_QUANT_ENABLED !== "false",
+          path: env.CP_MCP_TW_QUANT_PATH ?? `${REPO_ROOT}../tw-quant-mcp/bin/tw-quant-mcp`,
+        },
+        yfinance: {
+          enabled: env.CP_MCP_YFINANCE_ENABLED !== "0" && env.CP_MCP_YFINANCE_ENABLED !== "false",
+        },
+        finmind: {
+          enabled: env.CP_MCP_FINMIND_ENABLED === "1" || env.CP_MCP_FINMIND_ENABLED === "true",
+        },
       },
     },
     execution: {

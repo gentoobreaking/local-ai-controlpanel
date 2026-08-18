@@ -289,6 +289,43 @@ export async function collectEvidenceGet(
   return res.json();
 }
 
+export interface GateReason {
+  type: "insufficient_total_score" | "insufficient_evidence_count" | "low_single_score" | "high_risk_blocked";
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface GateResult {
+  status: "pass" | "fail";
+  score: number;
+  reasons: GateReason[];
+  stats: {
+    totalEvidence: number;
+    passedEvidence: number;
+    avgScore: number;
+    byType: Record<string, { count: number; avgScore: number }>;
+  };
+  timestamp: string;
+}
+
+export interface GateInput {
+  evidence: EvidenceSource[];
+  weights?: Record<string, number>;
+  thresholds?: { passThreshold?: number; minEvidenceCount?: number; minSingleScore?: number };
+  risk?: "low" | "medium" | "high";
+}
+
+/** POST /api/v1/evidence/gate（§14）— 執行 Evidence Gate 判斷 */
+export async function evaluateEvidenceGate(input: GateInput): Promise<GateResult> {
+  const res = await f(`${cpBaseUrl}/api/v1/evidence/gate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`evaluateEvidenceGate ${res.status}`);
+  return res.json();
+}
+
 export type SandboxStatus = Record<string, boolean>;
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {

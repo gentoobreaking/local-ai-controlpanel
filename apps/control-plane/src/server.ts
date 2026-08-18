@@ -15,6 +15,7 @@ import { createStrategyRouter } from "./routes/strategy.js";
 import { createCliRouter } from "./routes/cli.js";
 import { createResearchRouter } from "./routes/research.js";
 import { createEvidenceRouter } from "./routes/evidence.js";
+import { createEvidenceGateRouter } from "./routes/evidence-gate.js";
 import { loadPolicies } from "./policy/loader.js";
 import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
@@ -27,6 +28,8 @@ import { getMemoryRetriever } from "./memory/retriever.js";
 import { StyleKnowledgeBase } from "./rag/style-kb.js";
 import { createResearchEngine } from "./research/engine.js";
 import { createEvidenceModel } from "./evidence/model.js";
+import { createEvidenceGate } from "./evidence/gate-api.js";
+import { existsSync } from "node:fs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -58,6 +61,8 @@ export interface AppDeps {
   styleKb: StyleKnowledgeBase;
   researchEngine: ReturnType<typeof createResearchEngine>;
   evidenceModel: ReturnType<typeof createEvidenceModel>;
+  evidenceGate: ReturnType<typeof createEvidenceGate>;
+  mcpServers: Map<string, McpServer>;
 }
 
 export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
@@ -111,6 +116,40 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const evidenceModel = createEvidenceModel();
   evidenceModel.setResearchEngine(researchEngine);
   evidenceModel.setVerificationEngine(verificationEngine);
+  const evidenceGate = createEvidenceGate();
+
+  // §18/§19 多層 MCP Server 初始化（Primary → Backup → 2nd Backup）
+  const mcpServers: Map<string, McpServer> = new Map();
+
+  // 1. Primary: tw-quant-mcp (本機 Go 執行檔)
+  const twQuantCfg = config.protocol.mcpServers.twQuant;
+  if (twQuantCfg.enabled && existsSync(twQuantCfg.path)) {
+    mcpServers.set("tw-quant-mcp", new McpServer({
+      command: twQuantCfg.path,
+      args: [],
+      env: { ...process.env, MCP_TRANSPORT: "stdio" },
+    }));
+  }
+
+  // 2. Backup: yfinance-mcp (PyPI uvx)
+  const yfinanceCfg = config.protocol.mcpServers.yfinance;
+  if (yfinanceCfg.enabled) {
+    mcpServers.set("yfinance-mcp", new McpServer({
+      command: "uvx",
+      args: ["yfmcp@latest"],
+      env: { ...process.env },
+    }));
+  }
+
+  // 3. 2nd Backup: FinMind-MCP (PyPI uvx，需 FINMIND_TOKEN)
+  const finmindCfg = config.protocol.mcpServers.finmind;
+  if (finmindCfg.enabled && process.env.FINMIND_TOKEN) {
+    mcpServers.set("finmind-mcp", new McpServer({
+      command: "uvx",
+      args: ["finmind-mcp"],
+      env: { ...process.env, FINMIND_TOKEN: process.env.FINMIND_TOKEN },
+    }));
+  }
 
   const app = Fastify({ logger: false });
 
@@ -138,9 +177,15 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   });
   await app.register(createResearchRouter, { deps: { researchEngine } });
   await app.register(createEvidenceRouter, { deps: { evidenceModel } });
+  await app.register(createEvidenceGateRouter, { deps: { evidenceGate } });
 
   // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
-  const mcpServer = config.protocol.mcp.enabled
+  // 註冊多層 MCP Server
+  for (const [name, server] of mcpServers) {
+    registerMcpRoutes(app, server, { name });
+  }
+
+  const legacyMcpServer = config.protocol.mcp.enabled
     ? new McpServer({
         policy: policyEngine,
         sandboxRegistry: registry,
@@ -150,7 +195,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const acpServer = config.protocol.acp.enabled
     ? new AcpServer({ taskManager, runner, bus, policyEngine })
     : undefined;
-  if (mcpServer) registerMcpRoutes(app, mcpServer);
+  if (legacyMcpServer) registerMcpRoutes(app, legacyMcpServer);
   if (acpServer) registerAcpRoutes(app, acpServer);
 
   app.get("/health", async () => ({ status: "ok" }));
@@ -172,7 +217,8 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
       styleKb,
       researchEngine,
       evidenceModel,
-      mcpServer,
+      evidenceGate,
+      mcpServers,
       acpServer,
     },
   };
