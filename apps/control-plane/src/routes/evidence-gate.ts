@@ -19,7 +19,7 @@ const GateInputSchema = z.object({
     score: z.number().min(0).max(1),
     accessedAt: z.string(),
     createdAt: z.string().optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })),
   weights: z.object({
     documentation: z.number().positive().optional(),

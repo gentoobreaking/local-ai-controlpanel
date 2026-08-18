@@ -62,7 +62,6 @@ export interface AppDeps {
   researchEngine: ReturnType<typeof createResearchEngine>;
   evidenceModel: ReturnType<typeof createEvidenceModel>;
   evidenceGate: ReturnType<typeof createEvidenceGate>;
-  mcpServers: Map<string, McpServer>;
 }
 
 export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
@@ -118,39 +117,6 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   evidenceModel.setVerificationEngine(verificationEngine);
   const evidenceGate = createEvidenceGate();
 
-  // §18/§19 多層 MCP Server 初始化（Primary → Backup → 2nd Backup）
-  const mcpServers: Map<string, McpServer> = new Map();
-
-  // 1. Primary: tw-quant-mcp (本機 Go 執行檔)
-  const twQuantCfg = config.protocol.mcpServers.twQuant;
-  if (twQuantCfg.enabled && existsSync(twQuantCfg.path)) {
-    mcpServers.set("tw-quant-mcp", new McpServer({
-      command: twQuantCfg.path,
-      args: [],
-      env: { ...process.env, MCP_TRANSPORT: "stdio" },
-    }));
-  }
-
-  // 2. Backup: yfinance-mcp (PyPI uvx)
-  const yfinanceCfg = config.protocol.mcpServers.yfinance;
-  if (yfinanceCfg.enabled) {
-    mcpServers.set("yfinance-mcp", new McpServer({
-      command: "uvx",
-      args: ["yfmcp@latest"],
-      env: { ...process.env },
-    }));
-  }
-
-  // 3. 2nd Backup: FinMind-MCP (PyPI uvx，需 FINMIND_TOKEN)
-  const finmindCfg = config.protocol.mcpServers.finmind;
-  if (finmindCfg.enabled && process.env.FINMIND_TOKEN) {
-    mcpServers.set("finmind-mcp", new McpServer({
-      command: "uvx",
-      args: ["finmind-mcp"],
-      env: { ...process.env, FINMIND_TOKEN: process.env.FINMIND_TOKEN },
-    }));
-  }
-
   const app = Fastify({ logger: false });
 
   // §45.3 + §45.6：CORS — Tauri 2 webview 在 macOS 上以 `tauri://localhost` 載入前端，
@@ -180,11 +146,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createEvidenceGateRouter, { deps: { evidenceGate } });
 
   // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
-  // 註冊多層 MCP Server
-  for (const [name, server] of mcpServers) {
-    registerMcpRoutes(app, server, { name });
-  }
-
+  // 僅在明確啟用時建立內部 MCP Server（需完整 Control Plane 基礎設施）
   const legacyMcpServer = config.protocol.mcp.enabled
     ? new McpServer({
         policy: policyEngine,
@@ -197,6 +159,10 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     : undefined;
   if (legacyMcpServer) registerMcpRoutes(app, legacyMcpServer);
   if (acpServer) registerAcpRoutes(app, acpServer);
+
+  // 外部 MCP Server (tw-quant, yfinance, finmind) 為 subprocess-based，
+  // 需要專門的 subprocess proxy 實作，暫不在這裡自動掛載
+  // 可透過 MCP client 直接連接 stdio subprocess
 
   app.get("/health", async () => ({ status: "ok" }));
 
@@ -218,7 +184,6 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
       researchEngine,
       evidenceModel,
       evidenceGate,
-      mcpServers,
       acpServer,
     },
   };

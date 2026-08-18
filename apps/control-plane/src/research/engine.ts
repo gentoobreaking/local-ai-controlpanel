@@ -78,9 +78,10 @@ export async function searchViaMcp(
   symbol?: string,
   preferredServer?: McpServerName
 ): Promise<EvidenceSource[]> {
+  const allServers: McpServerName[] = ["tw-quant-mcp", "yfinance-mcp", "finmind-mcp"];
   const serversToTry: McpServerName[] = preferredServer
-    ? [preferredServer, ...["tw-quant-mcp", "yfinance-mcp", "finmind-mcp"].filter(s => s !== preferredServer)]
-    : ["tw-quant-mcp", "yfinance-mcp", "finmind-mcp"];
+    ? [preferredServer, ...allServers.filter(s => s !== preferredServer)]
+    : allServers;
 
   for (const serverName of serversToTry) {
     const server = registry.get(serverName);

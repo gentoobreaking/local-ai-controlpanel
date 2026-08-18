@@ -16,7 +16,7 @@ import type {
 class ConsoleLogger implements PluginLogger {
   constructor(private prefix: string) {}
 
-  private log(level: string, msg: string, meta?: Record<string, unknown>) {
+  private log(level: "debug" | "info" | "warn" | "error", msg: string, meta?: Record<string, unknown>) {
     const timestamp = new Date().toISOString();
     console[level](`[${timestamp}] [${this.prefix}] ${msg}`, meta ?? "");
   }
@@ -165,7 +165,7 @@ export class DefaultPluginRegistry implements PluginRegistry {
       this.context.logger.info(`Plugin enabled: ${pluginId}`);
       this.context.events.emit("plugin:enabled", { pluginId });
     } catch (e) {
-      this.context.logger.error(`Failed to enable plugin ${pluginId}:`, e);
+      this.context.logger.error(`Failed to enable plugin ${pluginId}:`, { error: e instanceof Error ? e.message : String(e) });
       throw e;
     }
   }
@@ -193,7 +193,7 @@ export class DefaultPluginRegistry implements PluginRegistry {
       this.context.logger.info(`Plugin disabled: ${pluginId}`);
       this.context.events.emit("plugin:disabled", { pluginId });
     } catch (e) {
-      this.context.logger.error(`Failed to disable plugin ${pluginId}:`, e);
+      this.context.logger.error(`Failed to disable plugin ${pluginId}:`, { error: e instanceof Error ? e.message : String(e) });
       throw e;
     }
   }

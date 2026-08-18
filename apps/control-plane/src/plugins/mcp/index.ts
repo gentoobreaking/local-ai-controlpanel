@@ -87,7 +87,7 @@ export abstract class McpPluginBase implements Plugin {
         this.servers.set(config.name, server);
         context.logger.info(`[${this.id}] Started MCP server: ${config.name} (${config.command} ${config.args.join(" ")})`);
       } catch (e) {
-        context.logger.error(`[${this.id}] Failed to start server ${config.name}:`, e);
+        context.logger.error(`[${this.id}] Failed to start server ${config.name}:`, { error: e instanceof Error ? e.message : String(e) });
         if (!config.enabled) continue; // 可選 server 失敗不阻塞
         throw e;
       }
@@ -104,7 +104,7 @@ export abstract class McpPluginBase implements Plugin {
         // server.close?.();
         context.logger.info(`[${this.id}] Stopped MCP server: ${name}`);
       } catch (e) {
-        context.logger.warn(`[${this.id}] Error stopping server ${name}:`, e);
+        context.logger.warn(`[${this.id}] Error stopping server ${name}:`, { error: e instanceof Error ? e.message : String(e) });
       }
     }
     this.servers.clear();
