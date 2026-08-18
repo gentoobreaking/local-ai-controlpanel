@@ -33,6 +33,7 @@ import { createEvidenceModel } from "./evidence/model.js";
 import { createEvidenceGate } from "./evidence/gate-api.js";
 import { createArtifactController } from "./artifact/controller.js";
 import { existsSync } from "node:fs";
+import { spawn, ChildProcess } from "node:child_process";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -151,7 +152,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createEvidenceGateRouter, { deps: { evidenceGate } });
   await app.register(createVerifyGateRouter, { deps: { evidenceGate, evidenceModel } });
 
-  // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
+// §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
   // 僅在明確啟用時建立內部 MCP Server（需完整 Control Plane 基礎設施）
   const legacyMcpServer = config.protocol.mcp.enabled
     ? new McpServer({
@@ -166,9 +167,95 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   if (legacyMcpServer) registerMcpRoutes(app, legacyMcpServer);
   if (acpServer) registerAcpRoutes(app, acpServer);
 
-  // 外部 MCP Server (tw-quant, yfinance, finmind) 為 subprocess-based，
-  // 需要專門的 subprocess proxy 實作，暫不在這裡自動掛載
-  // 可透過 MCP client 直接連接 stdio subprocess
+  // §18/§19 外部 MCP Server (tw-quant, yfinance, finmind) subprocess 掛載
+  const externalMcpProcesses = new Map<string, ChildProcess>();
+
+  async function startExternalMcpServers() {
+    const mcpCfg = config.protocol.mcpServers;
+
+    // 1. tw-quant-mcp (Go binary, stdio)
+    if (mcpCfg.twQuant.enabled && existsSync(mcpCfg.twQuant.path)) {
+      const proc = spawn(mcpCfg.twQuant.path, [], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, MCP_TRANSPORT: "stdio" },
+      });
+      proc.on("error", (e) => console.error("[tw-quant-mcp] spawn error:", e));
+      proc.on("exit", (code) => console.warn(`[tw-quant-mcp] exited with code ${code}`));
+      externalMcpProcesses.set("tw-quant-mcp", proc);
+      console.log("[MCP] Started tw-quant-mcp (stdio)");
+    }
+
+    // 2. yfinance-mcp (uvx)
+    if (mcpCfg.yfinance.enabled) {
+      const proc = spawn("uvx", ["yfmcp@latest"], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: process.env,
+      });
+      proc.on("error", (e) => console.error("[yfinance-mcp] spawn error:", e));
+      externalMcpProcesses.set("yfinance-mcp", proc);
+      console.log("[MCP] Started yfinance-mcp (stdio)");
+    }
+
+    // 3. finmind-mcp (uvx + token)
+    if (mcpCfg.finmind.enabled && process.env.FINMIND_TOKEN) {
+      const proc = spawn("uvx", ["finmind-mcp"], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, FINMIND_TOKEN: process.env.FINMIND_TOKEN },
+      });
+      proc.on("error", (e) => console.error("[finmind-mcp] spawn error:", e));
+      externalMcpProcesses.set("finmind-mcp", proc);
+      console.log("[MCP] Started finmind-mcp (stdio)");
+    }
+
+    // JSON-RPC stdio proxy routes
+    for (const [name, proc] of externalMcpProcesses) {
+      app.post(`/mcp/${name}`, async (req, reply) => {
+        return new Promise((resolve, reject) => {
+          const body = req.body as Record<string, unknown> | undefined;
+          const id = (body?.id as string) ?? randomUUID();
+          const request = { ...body, id, jsonrpc: "2.0" };
+
+          const onData = (data: Buffer) => {
+            try {
+              const lines = data.toString().trim().split("\n");
+              for (const line of lines) {
+                const msg = JSON.parse(line);
+                if (msg.id === id) {
+                  proc.stdout?.off("data", onData);
+                  resolve(reply.send(msg));
+                  return;
+                }
+              }
+            } catch {
+              // ignore parse errors, wait for next chunk
+            }
+          };
+
+          proc.stdout?.on("data", onData);
+
+          // 30s timeout
+          setTimeout(() => {
+            proc.stdout?.off("data", onData);
+            reject(new Error("MCP request timeout"));
+          }, 30000);
+
+          proc.stdin?.write(JSON.stringify(request) + "\n");
+        });
+      });
+    }
+
+    console.log(`[MCP] External servers started: ${Array.from(externalMcpProcesses.keys()).join(", ") || "none"}`);
+  }
+
+  await startExternalMcpServers();
+
+  // 清理外部 MCP 進程
+  app.addHook("onClose", async () => {
+    for (const [name, proc] of externalMcpProcesses) {
+      proc.kill("SIGTERM");
+      console.log(`[MCP] Stopped ${name}`);
+    }
+  });
 
   app.get("/health", async () => ({ status: "ok" }));
 
