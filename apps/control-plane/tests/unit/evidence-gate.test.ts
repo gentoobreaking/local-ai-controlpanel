@@ -1,150 +1,154 @@
-// Evidence Gate 測試（T019，spec §14）：兩階段評估 + 降級政策 + 卡死防護。
-// 全部確定性規則（無 LLM）。
+// T039 Evidence Gate 單元測試
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { loadPolicies } from "../../src/policy/loader.js";
-import { PolicyEngine } from "../../src/policy/engine.js";
-import { validateEvidenceGate } from "../../src/evidence/gate.js";
-import { createDb } from "../../src/db/index.js";
-import { TaskManager } from "../../src/task/task-manager.js";
-import type { ResearchSummary } from "../../src/policy/types.js";
+import { createEvidenceGate, DEFAULT_GATE_THRESHOLDS } from "../../src/evidence/gate-api.js";
+import { EVIDENCE_PASS_THRESHOLD } from "../../src/evidence/types.js";
+import type { EvidenceSource } from "../../src/evidence/types.js";
 
-const policiesDir = new URL("../../../../policies", import.meta.url).pathname;
-const loaded = loadPolicies(policiesDir);
-const engine = new PolicyEngine(loaded);
+function makeEvidence(overrides: Partial<EvidenceSource> = {}): EvidenceSource {
+  return {
+    type: "documentation",
+    id: `ev-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    title: "Test Evidence",
+    snippet: "test snippet",
+    credibility: 0.9,
+    relevance: 0.8,
+    timeliness: 1.0,
+    score: 0.85,
+    accessedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
-const summary = (over: Partial<ResearchSummary> = {}): ResearchSummary => ({
-  facts: 3,
-  sourcesCount: 2,
-  officialSources: 1,
-  ...over,
+test("DEFAULT_GATE_THRESHOLDS: 門檻值正確", () => {
+  assert.strictEqual(DEFAULT_GATE_THRESHOLDS.passThreshold, EVIDENCE_PASS_THRESHOLD);
+  assert.strictEqual(DEFAULT_GATE_THRESHOLDS.minEvidenceCount, 1);
+  assert.strictEqual(DEFAULT_GATE_THRESHOLDS.minSingleScore, 0.3);
 });
 
-test("COMPLETE + SUFFICIENT → PASS", () => {
-  const d = validateEvidenceGate(
-    { stage1: "COMPLETE", summary: summary(), risk: "medium" },
-    engine,
-  );
-  assert.equal(d.status, "PASS");
-  assert.equal(d.stage1, "COMPLETE");
-  assert.equal(d.stage2, "SUFFICIENT");
-  assert.equal(d.blocks, 0);
+test("EVIDENCE_PASS_THRESHOLD: 通過門檻為 0.7", () => {
+  assert.strictEqual(EVIDENCE_PASS_THRESHOLD, 0.7);
 });
 
-test("COMPLETE + INSUFFICIENT（來源不足）→ BLOCK，永不降級", () => {
-  const d = validateEvidenceGate(
-    { stage1: "COMPLETE", summary: summary({ sourcesCount: 1, facts: 2 }), risk: "low" },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.equal(d.stage2, "INSUFFICIENT");
-  assert.match(d.reason, /knowledge_gap/);
-  assert.equal(d.blocks, 1);
+test("createEvidenceGate: 返回實例", () => {
+  const gate = createEvidenceGate();
+  assert.ok(gate instanceof Object);
 });
 
-test("COMPLETE + 零證據 → BLOCK（INSUFFICIENT_LOW_CONFIDENCE）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "COMPLETE", summary: summary({ facts: 0, sourcesCount: 0 }), risk: "low" },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.equal(d.stage2, "INSUFFICIENT_LOW_CONFIDENCE");
-  assert.match(d.reason, /low_confidence/);
+test("evaluate: 空證據列表 → fail（證據數量不足）", () => {
+  const gate = createEvidenceGate();
+  const result = gate.evaluate({ evidence: [] });
+  assert.strictEqual(result.status, "fail");
+  assert.ok(result.reasons.some((r) => r.type === "insufficient_evidence_count"));
 });
 
-test("PARTIAL + 未達重試上限 → RESEARCH_AGAIN（卡死防護）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "PARTIAL", summary: summary(), risk: "low", researchRetries: 0 },
-    engine,
-  );
-  assert.equal(d.status, "RESEARCH_AGAIN");
-  assert.equal(d.retriesUsed, 0);
-  assert.match(d.reason, /retry 1\/2/);
+test("evaluate: 單條高分證據 → pass", () => {
+  const gate = createEvidenceGate();
+  const evidence = [makeEvidence({ score: 0.9, credibility: 1.0, relevance: 0.9, timeliness: 1.0 })];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "pass");
+  assert.ok(result.score >= 0.7);
 });
 
-test("FAILED + 未達重試上限 → RESEARCH_AGAIN", () => {
-  const d = validateEvidenceGate(
-    { stage1: "FAILED", summary: summary(), risk: "low", researchRetries: 0 },
-    engine,
-  );
-  assert.equal(d.status, "RESEARCH_AGAIN");
-  assert.match(d.reason, /retry 1\/2/);
+test("evaluate: 總分低於 0.7 → fail（insufficient_total_score）", () => {
+  const gate = createEvidenceGate();
+  const evidence = [makeEvidence({ score: 0.5, credibility: 0.5, relevance: 0.5, timeliness: 0.5 })];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "fail");
+  assert.ok(result.reasons.some((r) => r.type === "insufficient_total_score"));
 });
 
-test("重試耗盡後 PARTIAL + 低風險 + 本地證據足夠 → DEGRADED（帶旗標）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "PARTIAL", summary: summary(), risk: "low", researchRetries: 2 },
-    engine,
-  );
-  assert.equal(d.status, "DEGRADED");
-  assert.equal(d.retriesUsed, 2);
-  assert.ok(d.degraded, "應帶降級旗標");
-  assert.equal(d.degraded!.scope, "implementation");
-  assert.equal(d.degraded!.originalDecision, "PASS");
-  assert.equal(d.degraded!.actor, "policy");
-  assert.match(d.degraded!.reason, /research_partial/);
+test("evaluate: 多條證據加權平均 → pass", () => {
+  const gate = createEvidenceGate();
+  const evidence = [
+    makeEvidence({ type: "code_execution", score: 0.95, credibility: 1.0, relevance: 0.9, timeliness: 1.0 }),
+    makeEvidence({ type: "documentation", score: 0.8, credibility: 0.9, relevance: 0.8, timeliness: 1.0 }),
+    makeEvidence({ type: "memory", score: 0.85, credibility: 0.8, relevance: 0.85, timeliness: 0.9 }),
+  ];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "pass");
+  assert.ok(result.score >= 0.7);
 });
 
-test("重試耗盡後 high risk PARTIAL → BLOCK（高風險不得降級，§14.2 鐵律）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "PARTIAL", summary: summary(), risk: "high", researchRetries: 2 },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.equal(d.blocks, 1);
-  assert.match(d.reason, /high_risk/);
-  assert.ok(!d.degraded, "高風險不允許降級");
+test("evaluate: 低分證據 → fail（low_single_score）", () => {
+  const gate = createEvidenceGate();
+  const evidence = [
+    makeEvidence({ score: 0.9, credibility: 1.0, relevance: 0.9, timeliness: 1.0 }),
+    makeEvidence({ score: 0.2, credibility: 0.3, relevance: 0.3, timeliness: 0.3 }), // 低分
+  ];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "fail");
+  assert.ok(result.reasons.some((r) => r.type === "low_single_score"));
 });
 
-test("FAILED + 重試耗盡 → on_failed=ask_user → BLOCK（不擅自降級）", () => {
-  // default.yaml research_failure.on_failed = ask_user
-  const d = validateEvidenceGate(
-    { stage1: "FAILED", summary: summary({ facts: 2, sourcesCount: 1 }), risk: "low", researchRetries: 2 },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.match(d.reason, /ask_user/);
-  assert.ok(!d.degraded);
+test("evaluate: 高風險任務且證據不足 → fail（high_risk_blocked）", () => {
+  const gate = createEvidenceGate();
+  const evidence = [makeEvidence({ score: 0.75, credibility: 0.8, relevance: 0.8, timeliness: 0.8 })];
+  const result = gate.evaluate({ evidence, risk: "high" });
+  assert.strictEqual(result.status, "fail");
+  assert.ok(result.reasons.some((r) => r.type === "high_risk_blocked"));
 });
 
-test("重試耗盡 + PARTIAL + 本地證據不足 → BLOCK（知識缺口）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "PARTIAL", summary: summary({ facts: 0, sourcesCount: 0 }), risk: "low", researchRetries: 2 },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.match(d.reason, /knowledge|證據/);
+test("evaluate: 高風險任務且充分證據 → pass", () => {
+  const gate = createEvidenceGate();
+  const evidence = [
+    makeEvidence({ score: 0.9, credibility: 1.0, relevance: 0.9, timeliness: 1.0 }),
+    makeEvidence({ score: 0.85, credibility: 0.9, relevance: 0.9, timeliness: 1.0 }),
+  ];
+  const result = gate.evaluate({ evidence, risk: "high" });
+  assert.strictEqual(result.status, "pass");
 });
 
-test("research_failure policy 可由 policy 驅動（max_retries=2, backoff [5,30]）", () => {
-  const rf = engine.researchFailurePolicy();
-  assert.equal(rf.onPartial, "allow_local");
-  assert.equal(rf.onFailed, "ask_user");
-  assert.equal(rf.maxRetries, 2);
-  assert.deepEqual(rf.retryBackoffSeconds, [5, 30]);
+test("evaluate: 自定義權重影響分數", () => {
+  const gate = createEvidenceGate({ weights: { code_execution: 2.0, documentation: 0.5 } });
+  const evidence = [
+    makeEvidence({ type: "code_execution", score: 0.6, credibility: 0.7, relevance: 0.6, timeliness: 0.7 }),
+    makeEvidence({ type: "documentation", score: 0.9, credibility: 0.9, relevance: 0.9, timeliness: 1.0 }),
+  ];
+  const result = gate.evaluate({ evidence });
+  // code_execution 權重較高，應拉高總分
+  assert.ok(result.score > 0.6);
 });
 
-test("gate block 計數：BLOCK 一律 blocks=1（供 §36.2 Prevention Rate）", () => {
-  const d = validateEvidenceGate(
-    { stage1: "COMPLETE", summary: summary({ facts: 1, sourcesCount: 1 }), risk: "medium" },
-    engine,
-  );
-  assert.equal(d.status, "BLOCK");
-  assert.equal(d.blocks, 1);
+test("evaluate: 自定義門檻生效", () => {
+  const gate = createEvidenceGate({ thresholds: { passThreshold: 0.5 } });
+  const evidence = [makeEvidence({ score: 0.55, credibility: 0.6, relevance: 0.6, timeliness: 0.6 })];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "pass");
 });
 
-test("recordGateBlock 寫入 gate_blocks 表（§36.2 Prevention Rate 資料）", () => {
-  const dir = mkdtempSync(join(tmpdir(), "acp-gate-"));
-  const db = createDb(dir);
-  const tm = new TaskManager(db);
-  const t = tm.create({ userRequest: "high risk change", risk: "high" });
+test("evaluate: 結果包含完整統計資訊", () => {
+  const gate = createEvidenceGate();
+  const evidence = [
+    makeEvidence({ type: "code_execution", score: 0.9 }),
+    makeEvidence({ type: "documentation", score: 0.8 }),
+  ];
+  const result = gate.evaluate({ evidence });
+  assert.ok(result.stats.totalEvidence === 2);
+  assert.ok(result.stats.passedEvidence >= 0);
+  assert.ok(typeof result.stats.avgScore === "number");
+  assert.ok(result.stats.byType.code_execution);
+  assert.ok(result.stats.byType.documentation);
+  assert.ok(result.timestamp);
+});
 
-  tm.recordGateBlock(t.id, "BLOCK", "COMPLETE", "INSUFFICIENT", "knowledge_gap", 0);
-  tm.recordGateBlock(t.id, "DEGRADED", "PARTIAL", "SUFFICIENT", "allow_local", 2);
+test("evaluate: 失敗原因包含詳細資訊", () => {
+  const gate = createEvidenceGate();
+  const evidence = [makeEvidence({ score: 0.5 })];
+  const result = gate.evaluate({ evidence });
+  const reason = result.reasons.find((r) => r.type === "insufficient_total_score");
+  assert.ok(reason);
+  assert.ok(reason.details);
+  assert.ok(typeof reason.details?.score === "number");
+  assert.ok(typeof reason.details?.threshold === "number");
+});
 
-  assert.equal(tm.gateBlockCount(), 1, "只有 BLOCK 計入");
+test("evaluate: 低風險單條低分證據 → fail（low_single_score）", () => {
+  const gate = createEvidenceGate();
+  const evidence = [makeEvidence({ score: 0.25, credibility: 0.3, relevance: 0.3, timeliness: 0.3 })];
+  const result = gate.evaluate({ evidence });
+  assert.strictEqual(result.status, "fail");
+  assert.ok(result.reasons.some((r) => r.type === "low_single_score"));
 });

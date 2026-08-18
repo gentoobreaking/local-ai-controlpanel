@@ -326,6 +326,36 @@ export async function evaluateEvidenceGate(input: GateInput): Promise<GateResult
   return res.json();
 }
 
+export interface VerifyGateInput {
+  taskId: string;
+  query?: string;
+  weights?: Record<string, number>;
+  thresholds?: { passThreshold?: number; minEvidenceCount?: number; minSingleScore?: number };
+  risk?: "low" | "medium" | "high";
+  maxResults?: number;
+}
+
+export interface VerifyGateResult {
+  taskId: string;
+  gate: GateResult;
+  evidenceSummary: {
+    totalEvidence: number;
+    totalScore: number;
+    passed: boolean;
+  };
+}
+
+/** POST /api/v1/evidence/verify-gate（§14）— 根據 taskId 執行 Evidence Gate 判斷 */
+export async function verifyGate(input: VerifyGateInput): Promise<VerifyGateResult> {
+  const res = await f(`${cpBaseUrl}/api/v1/evidence/verify-gate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`verifyGate ${res.status}`);
+  return res.json();
+}
+
 export type SandboxStatus = Record<string, boolean>;
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {

@@ -16,6 +16,7 @@ import { createCliRouter } from "./routes/cli.js";
 import { createResearchRouter } from "./routes/research.js";
 import { createEvidenceRouter } from "./routes/evidence.js";
 import { createEvidenceGateRouter } from "./routes/evidence-gate.js";
+import { createVerifyGateRouter } from "./routes/verify-gate.js";
 import { loadPolicies } from "./policy/loader.js";
 import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
@@ -144,6 +145,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createResearchRouter, { deps: { researchEngine } });
   await app.register(createEvidenceRouter, { deps: { evidenceModel } });
   await app.register(createEvidenceGateRouter, { deps: { evidenceGate } });
+  await app.register(createVerifyGateRouter, { deps: { evidenceGate, evidenceModel } });
 
   // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
   // 僅在明確啟用時建立內部 MCP Server（需完整 Control Plane 基礎設施）
