@@ -226,7 +226,13 @@ export class AcpServer {
       }
       case "Escalate": {
         // Phase 1–5：escalation 停用（§25），僅記錄 + 回報 NOT_SUPPORTED
-        const decision = policyEngine.evaluateEscalation();
+        const taskRow = taskManager.getRow(ctrl.taskId);
+        const decision = policyEngine.evaluateEscalation({
+          attempt: taskRow?.attempt ?? 1,
+          failureClassification: taskRow?.flags.find(f => f.startsWith("reflection:"))?.split(":")[1],
+          localHistory: [],
+          analysis: { complexity: "medium", risk: "medium" } as any,
+        });
         taskManager.recordApproval(
           ctrl.taskId,
           "escalation",

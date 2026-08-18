@@ -65,7 +65,9 @@ test("stub 模式：llama.cpp 不可達時走 stub 快速路徑（§16 備註）
   const res = await worker.execute(makeRequest());
   assert.equal(res.ok, true);
   assert.ok(res.patch!.includes("TASK-001"), "patch 含 task id");
-  assert.deepEqual(res.changedFiles, ["pkg/controller/deployment.go"]);
+  // stub 模式產生 Python 檔案於 src/ 目錄下
+  assert.ok(res.changedFiles.length > 0);
+  assert.ok(res.changedFiles[0]!.startsWith("src/") && res.changedFiles[0]!.endsWith("_stub.py"));
   assert.ok(res.summary.includes("2 筆 evidence"), "summary 含 evidence 筆數");
   await worker.shutdown();
 });

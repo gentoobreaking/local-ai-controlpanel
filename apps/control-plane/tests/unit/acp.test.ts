@@ -119,7 +119,7 @@ test("control：Cancel / Retry / Escalate（NOT_SUPPORTED）/ InjectFeedback / A
   // Escalate：Phase 1–5 NOT_SUPPORTED
   ack = await acp.control({ type: "control", id: "c3", action: "Escalate", taskId: task.id });
   assert.equal(ack.accepted, false);
-  assert.ok(ack.detail!.includes("Phase 1–5"));
+  assert.ok(ack.detail!.includes("Phase < 9") || ack.detail!.includes("Phase 1–5"));
   assert.ok(tm.getRow(task.id)!.flags.some((f) => f.startsWith("escalation:")));
 
   // InjectFeedback

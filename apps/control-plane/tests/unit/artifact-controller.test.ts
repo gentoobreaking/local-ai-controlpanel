@@ -130,8 +130,8 @@ test("rollback：回復原內容並標記 rolled_back", async () => {
   await assert.rejects(() => controller.rollback(applied.patchId), /不可 rollback/);
 });
 
-test("apply 前 git apply --check 失敗（diff 與 repo 不一致）→ 拒絕", async () => {
-  // 內容與 repo 實際狀態（hello）不符的 diff
+test("normalizeExistingFiles 會自動修正內容不符的 diff（T023 正規化功能）", async () => {
+  // 內容與 repo 實際狀態（hello）不符的 diff，正規化後會自動修正為正確的 diff
   const diff = [
     "diff --git a/src/foo.ts b/src/foo.ts",
     "index 1111111..2222222 100644",
@@ -141,10 +141,8 @@ test("apply 前 git apply --check 失敗（diff 與 repo 不一致）→ 拒絕"
     "-not-the-real-content",
     "+anything",
   ].join("\n") + "\n";
-  await assert.rejects(
-    () => controller.apply({ taskId, attempt: 1, diff, workspaceDir: workDir }, artifactPolicy),
-    ArtifactViolation,
-  );
-  assert.ok(!existsSync(join(workDir, "src", "bar.ts")), "不得套用任何檔案");
-  assert.equal(readFileSync(join(workDir, "src", "foo.ts"), "utf8"), "hello\n");
+  const applied = await controller.apply({ taskId, attempt: 1, diff, workspaceDir: workDir }, artifactPolicy);
+  assert.equal(applied.status, "applied");
+  // 正規化後會將檔案內容修正為 "anything"
+  assert.equal(readFileSync(join(workDir, "src", "foo.ts"), "utf8"), "anything\n");
 });
