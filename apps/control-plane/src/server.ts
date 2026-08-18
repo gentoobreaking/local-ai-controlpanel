@@ -17,6 +17,7 @@ import { createResearchRouter } from "./routes/research.js";
 import { createEvidenceRouter } from "./routes/evidence.js";
 import { createEvidenceGateRouter } from "./routes/evidence-gate.js";
 import { createVerifyGateRouter } from "./routes/verify-gate.js";
+import { createArtifactRouter } from "./routes/artifact.js";
 import { loadPolicies } from "./policy/loader.js";
 import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
@@ -30,6 +31,7 @@ import { StyleKnowledgeBase } from "./rag/style-kb.js";
 import { createResearchEngine } from "./research/engine.js";
 import { createEvidenceModel } from "./evidence/model.js";
 import { createEvidenceGate } from "./evidence/gate-api.js";
+import { createArtifactController } from "./artifact/controller.js";
 import { existsSync } from "node:fs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -117,6 +119,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   evidenceModel.setResearchEngine(researchEngine);
   evidenceModel.setVerificationEngine(verificationEngine);
   const evidenceGate = createEvidenceGate();
+  const artifactController = createArtifactController({ db });
 
   const app = Fastify({ logger: false });
 
@@ -142,6 +145,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createCliRouter, {
     deps: { taskManager, policies, policyEngine, verificationEngine, workerRegistry },
   });
+  await app.register(createArtifactRouter, { deps: { artifactController } });
   await app.register(createResearchRouter, { deps: { researchEngine } });
   await app.register(createEvidenceRouter, { deps: { evidenceModel } });
   await app.register(createEvidenceGateRouter, { deps: { evidenceGate } });

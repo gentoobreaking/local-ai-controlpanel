@@ -415,3 +415,18 @@ export function subscribeTaskEvents(
 
   return () => source.close();
 }
+
+/** POST /api/v1/artifact/canonicalize（§20）— Diff 正規化 */
+export async function canonicalizeDiff(
+  diff: string,
+  workspaceDir: string,
+): Promise<string> {
+  const res = await f(`${cpBaseUrl}/api/v1/artifact/canonicalize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ diff, workspaceDir }),
+  });
+  if (!res.ok) throw new Error(`canonicalizeDiff ${res.status}`);
+  const data = await res.json();
+  return data.canonicalDiff;
+}

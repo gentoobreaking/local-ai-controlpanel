@@ -386,6 +386,113 @@ function writeDiffTmp(diff: string): string {
   return tmp;
 }
 
+/**
+ * Canonicalize（T023）：把 model raw diff 套到 scratch copy 後，以
+ * `git diff --no-index` 產出「真實內容變更」的最小 diff。
+ * 模型把整檔重 emit、hunk 錯、重複新增已存在內容等垃圾會在此消散；
+ * 未造成實質改變的檔案（如 tests/ 重複 emit 內容相同）不會出現在結果，
+ * 因此政策 readonly/forbidden 驗證以「實際變更」為準。
+ * 回傳 canonical diff（可能為空字串＝無實質變更）。
+ */
+export async function canonicalizeDiff(rawDiff: string, workspaceDir: string): Promise<string> {
+  // 空 diff 直接返回空字串
+  if (!rawDiff || !rawDiff.trim()) {
+    return "";
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "acp-canon-"));
+  try {
+    cpSync(workspaceDir, scratch, { recursive: true, filter: (src) => !src.includes(".git") });
+    // 直接使用內部 applyDiffToDir 邏輯（複製這裡避免循環依賴）
+    const normalized = await normalizeExistingFiles(rawDiff, scratch);
+    let resolved = normalized;
+    const gitApplyOk = async (diff: string): Promise<boolean> => {
+      const t = writeDiffTmp(diff);
+      try {
+        await execFileAsync("git", ["apply", "--check", t], { cwd: scratch });
+        return true;
+      } catch {
+        return false;
+      } finally {
+        rmSync(t, { force: true });
+      }
+    };
+    if (!(await gitApplyOk(normalized))) {
+      const rawSections = normalized.split(/(?=^diff --git )/m).filter((s) => s.trim());
+      const rebuiltSections = await Promise.all(
+        rawSections.map(async (section) => {
+          let target = /^diff --git a\/?(\S+) b\/?(\S+)/m.exec(section)?.[2];
+          if (!target) {
+            target = /^\+\+\+ b\/?(\S+)/m.exec(section)?.[1];
+            if (!target) target = /^--- a\/?(\S+)/m.exec(section)?.[1];
+          }
+          if (!target) return section;
+          const rebuilt = await rebuildSectionAsFullRewrite(section, scratch, target);
+          return rebuilt && (await gitApplyOk(rebuilt)) ? rebuilt : section;
+        }),
+      );
+      const joined = rebuiltSections.join("");
+      if (await gitApplyOk(joined)) {
+        resolved = joined;
+      } else {
+        const msg = (await execFileAsync("git", ["apply", "--check", writeDiffTmp(normalized)], { cwd: scratch })
+          .then(() => "ok")
+          .catch((e) => (e as Error).message) as string)
+          .split("\n")
+          .slice(0, 3)
+          .join(" ");
+        throw new ArtifactViolation(`(git apply --check 失敗) ${msg}`, "not_allowed");
+      }
+    }
+    const applyTmp = writeDiffTmp(resolved);
+    try {
+      await execFileAsync("git", ["apply", applyTmp], { cwd: scratch });
+    } finally {
+      rmSync(applyTmp, { force: true });
+    }
+    // 產生 canonical diff
+    const files = diffFiles(resolved);
+    const sections: string[] = [];
+    for (const f of files) {
+      const orig = join(workspaceDir, f);
+      const cand = join(scratch, f);
+      const oExists = existsSync(orig);
+      const cExists = existsSync(cand);
+      if (!oExists && !cExists) continue;
+      const cmpDir = join(scratch, ".acp-cmp");
+      mkdirSync(cmpDir, { recursive: true });
+      const oName = join(cmpDir, "orig.bin");
+      const cName = join(cmpDir, "cand.bin");
+      if (oExists) {
+        cpSync(orig, oName);
+      } else {
+        writeFileSync(oName, "");
+      }
+      if (cExists) cpSync(cand, cName);
+      const res = await execFileAsync(
+        "git",
+        ["diff", "--no-index", "--", oName, cName],
+        { cwd: scratch, maxBuffer: 8 * 1024 * 1024 },
+      ).catch((e) => ({ stdout: (e.stdout as string) ?? "", stderr: (e.stderr as string) ?? "" }));
+      rmSync(oName, { force: true });
+      rmSync(cName, { force: true });
+      let raw = (res.stdout ?? res.stderr ?? "") as string;
+      if (!raw.trim()) continue;
+      const created = !oExists && cExists;
+      const deleted = oExists && !cExists;
+      raw = raw
+        .replace(/^diff --git .*\n/m, `diff --git ${created ? "/dev/null b/" + f : deleted ? "a/" + f + " /dev/null" : "a/" + f + " b/" + f}\n`)
+        .replace(/^--- .*$/m, created ? "--- /dev/null" : `--- a/${f}`)
+        .replace(/^\+\+\+ .*$/m, deleted ? "+++ /dev/null" : `+++ b/${f}`)
+        .replace(/^(index .*)$/m, "");
+      if (!/^diff --git /m.test(raw)) continue;
+      sections.push(raw);
+    }
+    return sections.join("");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 export function createArtifactController(deps: ArtifactControllerDeps) {
   const db = deps.db;
 
@@ -447,62 +554,12 @@ export function createArtifactController(deps: ArtifactControllerDeps) {
     return resolved;
   }
 
-  /**
-   * Canonicalize（T023）：把 model raw diff 套到 scratch copy 後，以
-   * `git diff --no-index` 產出「真實內容變更」的最小 diff。
-   * 模型把整檔重 emit、hunk 錯、重複新增已存在內容等垃圾會在此消散；
-   * 未造成實質改變的檔案（如 tests/ 重複 emit 內容相同）不會出現在結果，
-   * 因此政策 readonly/forbidden 驗證以「實際變更」為準。
-   * 回傳 canonical diff（可能為空字串＝無實質變更）。
-   */
-  async function canonicalizeDiff(rawDiff: string, workspaceDir: string): Promise<string> {
-    const scratch = mkdtempSync(join(tmpdir(), "acp-canon-"));
-    try {
-      cpSync(workspaceDir, scratch, { recursive: true, filter: (src) => !src.includes(".git") });
-      const resolved = await applyDiffToDir(rawDiff, scratch);
-      const files = diffFiles(resolved);
-      const sections: string[] = [];
-      for (const f of files) {
-        const orig = join(workspaceDir, f);
-        const cand = join(scratch, f);
-        const oExists = existsSync(orig);
-        const cExists = existsSync(cand);
-        if (!oExists && !cExists) continue;
-        const cmpDir = join(scratch, ".acp-cmp");
-        mkdirSync(cmpDir, { recursive: true });
-        const oName = join(cmpDir, "orig.bin");
-        const cName = join(cmpDir, "cand.bin");
-        if (oExists) {
-          cpSync(orig, oName);
-        } else {
-          // 新增檔案：建立空的 orig.bin 供 git diff --no-index 比較
-          writeFileSync(oName, "");
-        }
-        if (cExists) cpSync(cand, cName);
-        const res = await execFileAsync(
-          "git",
-          ["diff", "--no-index", "--", oName, cName],
-          { cwd: cmpDir, maxBuffer: 8 * 1024 * 1024 },
-        ).catch((e) => ({ stdout: (e.stdout as string) ?? "", stderr: (e.stderr as string) ?? "" }));
-        rmSync(oName, { force: true });
-        rmSync(cName, { force: true });
-        let raw = (res.stdout ?? res.stderr ?? "") as string;
-        if (!raw.trim()) continue;
-        const created = !oExists && cExists;
-        const deleted = oExists && !cExists;
-        raw = raw
-          .replace(/^diff --git .*\n/m, `diff --git ${created ? "/dev/null b/" + f : deleted ? "a/" + f + " /dev/null" : "a/" + f + " b/" + f}\n`)
-          .replace(/^--- .*$/m, created ? "--- /dev/null" : `--- a/${f}`)
-          .replace(/^\+\+\+ .*$/m, deleted ? "+++ /dev/null" : `+++ b/${f}`)
-          .replace(/^(index .*)$/m, "");
-        if (!/^diff --git /m.test(raw)) continue;
-        sections.push(raw);
-      }
-      return sections.join("");
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
-  }
+/** execFile 不支援 stdin 餵入 → diff 寫入暫存檔 */
+function writeDiffTmp(diff: string): string {
+  const tmp = join(tmpdir(), `acp-patch-${randomUUID()}.diff`);
+  writeFileSync(tmp, diff);
+  return tmp;
+}
 
   async function apply(patch: Patch, policy: ArtifactPolicy): Promise<AppliedPatch> {
     // 0. 正規化 worker diff（new-file ↔ 已存在檔案；§20 統一入口）
@@ -573,6 +630,8 @@ export function createArtifactController(deps: ArtifactControllerDeps) {
     validate: validatePatch,
     diffFiles,
     normalizeExistingFiles,
-    canonicalizeDiff,
   };
 }
+
+export type { ArtifactPolicy };
+export type ArtifactController = ReturnType<typeof createArtifactController>;
