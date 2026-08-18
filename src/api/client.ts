@@ -172,6 +172,63 @@ export async function getTaskLogs(id: string): Promise<LogsResult> {
   return res.json();
 }
 
+export interface ResearchQuery {
+  taskId: string;
+  query: string;
+  language?: string;
+  errorType?: string;
+  topK?: number;
+  maxAgeDays?: number;
+}
+
+export interface EvidenceSource {
+  type: "memory" | "style-kb" | "external";
+  id: string;
+  title: string;
+  url?: string;
+  snippet: string;
+  confidence: number;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResearchResult {
+  taskId: string;
+  query: string;
+  evidence: EvidenceSource[];
+  summary: string;
+  confidence: number;
+  timestamp: string;
+}
+
+/** POST /api/v1/research（§11）— 執行研究查詢 */
+export async function research(query: ResearchQuery): Promise<ResearchResult> {
+  const res = await f(`${cpBaseUrl}/api/v1/research`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(query),
+  });
+  if (!res.ok) throw new Error(`research ${res.status}`);
+  return res.json();
+}
+
+/** GET /api/v1/research/:taskId?q=...（§11）— 便捷查詢 */
+export async function researchGet(
+  taskId: string,
+  opts: { query: string; language?: string; errorType?: string; topK?: number; maxAgeDays?: number },
+): Promise<ResearchResult> {
+  const params = new URLSearchParams();
+  params.set("query", opts.query);
+  if (opts.language) params.set("language", opts.language);
+  if (opts.errorType) params.set("errorType", opts.errorType);
+  if (opts.topK) params.set("topK", String(opts.topK));
+  if (opts.maxAgeDays) params.set("maxAgeDays", String(opts.maxAgeDays));
+
+  const res = await f(`${cpBaseUrl}/api/v1/research/${taskId}?${params.toString()}`);
+  if (!res.ok) throw new Error(`researchGet ${res.status}`);
+  return res.json();
+}
+
 export type SandboxStatus = Record<string, boolean>;
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {

@@ -1,0 +1,207 @@
+// Research Engine（Spec §11）
+//
+// 實作文獻檢索、證據收集與分析：
+// - Query Expansion：關鍵字擴展、同義詞匹配
+// - 3-gram 相似度匹配（復用 MemoryRetriever/StyleKB 的向量基礎設施）
+// - 證據收集：來源標記、可信度評分、去重
+// - 連接 Memory Retriever（專案記憶）+ StyleKB（跨專案知識庫）
+
+import { ngramVector, cosineSim } from "../rag/style-kb.js";
+import type {
+  ResearchQuery,
+  EvidenceSource,
+  ResearchResult,
+  ResearchEngineOptions,
+} from "./types.js";
+
+export type { EvidenceSource, ResearchQuery, ResearchResult, ResearchEngineOptions };
+
+const DEFAULT_TOP_K = 5;
+const DEFAULT_MAX_AGE_DAYS = 30;
+const CONFIDENCE_THRESHOLD = 0.3;
+
+export function queryExpansion(query: string): string[] {
+  const base = query.toLowerCase().trim();
+  const expansions = new Set<string>([base]);
+
+  const synonyms: Record<string, string[]> = {
+    "lint": ["linting", "style", "formatter", "flake8", "eslint", "pylint"],
+    "type": ["typing", "type hint", "type annotation", "mypy", "tsc"],
+    "import": ["imports", "module", "dependency", "require", "from"],
+    "syntax": ["parse", "parsing", "syntax error", "parser"],
+    "undefined": ["not defined", "reference error", "undeclared"],
+    "unused": ["dead code", "unreferenced", "unreferenced variable"],
+    "format": ["formatting", "indentation", "whitespace", "prettier", "black"],
+    "test": ["testing", "unit test", "pytest", "jest", "vitest"],
+    "build": ["compile", "compilation", "bundling", "webpack", "vite"],
+    "deploy": ["deployment", "ci/cd", "pipeline", "release"],
+  };
+
+  for (const [key, vals] of Object.entries(synonyms)) {
+    if (base.includes(key)) {
+      for (const v of vals) expansions.add(v);
+    }
+  }
+
+  const words = base.split(/\s+/).filter((w) => w.length > 2);
+  for (let i = 0; i < words.length; i++) {
+    for (let j = i + 1; j < words.length; j++) {
+      expansions.add(`${words[i]} ${words[j]}`);
+    }
+  }
+
+  return [...expansions];
+}
+
+export function computeCredibility(source: EvidenceSource): number {
+  let score = source.confidence;
+
+  switch (source.type) {
+    case "memory":
+      score *= 0.9;
+      break;
+    case "style-kb":
+      score *= 0.85;
+      break;
+    case "external":
+      score *= 0.7;
+      break;
+  }
+
+  return Math.min(1, Math.max(0, score));
+}
+
+export function deduplicateEvidence(evidence: EvidenceSource[]): EvidenceSource[] {
+  const seen = new Set<string>();
+  return evidence.filter((e) => {
+    const key = `${e.type}:${e.id}:${e.snippet.slice(0, 100)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export class ResearchEngine {
+  private memoryRetriever: any;
+  private styleKb: any;
+  private externalSearch?: (query: string) => Promise<EvidenceSource[]>;
+
+  constructor(opts: ResearchEngineOptions = {}) {
+    this.memoryRetriever = opts.memoryRetriever;
+    this.styleKb = opts.styleKb;
+    this.externalSearch = opts.externalSearch;
+  }
+
+  async research(query: ResearchQuery): Promise<ResearchResult> {
+    const { taskId, query: queryText, language, errorType, topK = DEFAULT_TOP_K, maxAgeDays = DEFAULT_MAX_AGE_DAYS } = query;
+    const expandedQueries = queryExpansion(queryText);
+
+    const allEvidence: EvidenceSource[] = [];
+
+    if (this.memoryRetriever && taskId) {
+      const project = this.extractProjectFromTaskId(taskId);
+      if (project) {
+        for (const q of expandedQueries.slice(0, 3)) {
+          const memories = this.memoryRetriever.retrieveMemory({
+            project,
+            query: q,
+            topK: Math.max(1, Math.floor(topK / 2)),
+            threshold: CONFIDENCE_THRESHOLD,
+            tags: language ? [language] : undefined,
+          });
+          for (const m of memories) {
+            allEvidence.push({
+              type: "memory",
+              id: m.record.id,
+              title: `Project Memory: ${m.record.key}`,
+              snippet: m.record.value.slice(0, 300),
+              confidence: m.score,
+              createdAt: m.record.createdAt,
+              metadata: { key: m.record.key, tags: m.record.tags, project: m.record.project },
+            });
+          }
+        }
+      }
+    }
+
+    if (this.styleKb) {
+      for (const q of expandedQueries.slice(0, 3)) {
+        const cases = this.styleKb.search({
+          language: language ?? "unknown",
+          errorType,
+          snippet: q,
+          topK: Math.max(1, Math.floor(topK / 2)),
+          maxAgeDays,
+        });
+        for (const c of cases) {
+          allEvidence.push({
+            type: "style-kb",
+            id: c.id,
+            title: `Style KB: ${c.errorType} (${c.language})`,
+            snippet: `${c.errorSnippet.slice(0, 200)}\n---\n${c.fixedDiff.slice(0, 200)}`,
+            confidence: 0.8,
+            createdAt: c.createdAt,
+            metadata: { errorType: c.errorType, language: c.language, isFewShot: c.isFewShot },
+          });
+        }
+      }
+    }
+
+    if (this.externalSearch) {
+      for (const q of expandedQueries.slice(0, 2)) {
+        try {
+          const external = await this.externalSearch(q);
+          allEvidence.push(...external);
+        } catch {
+          // ignore external search failures
+        }
+      }
+    }
+
+    const uniqueEvidence = deduplicateEvidence(allEvidence);
+    const scoredEvidence = uniqueEvidence
+      .map((e) => ({ ...e, confidence: computeCredibility(e) }))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, topK);
+
+    const avgConfidence = scoredEvidence.length > 0
+      ? scoredEvidence.reduce((sum, e) => sum + e.confidence, 0) / scoredEvidence.length
+      : 0;
+
+    const summary = this.generateSummary(queryText, scoredEvidence);
+
+    return {
+      taskId,
+      query: queryText,
+      evidence: scoredEvidence,
+      summary,
+      confidence: avgConfidence,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private extractProjectFromTaskId(taskId: string): string | undefined {
+    const parts = taskId.split("-");
+    return parts.length > 0 ? parts[0] : undefined;
+  }
+
+  private generateSummary(query: string, evidence: EvidenceSource[]): string {
+    if (evidence.length === 0) {
+      return `未找到與 "${query}" 相關的證據。建議擴大搜尋範圍或檢查專案配置。`;
+    }
+
+    const sources = new Set(evidence.map((e) => e.type));
+    const sourceLabels = Array.from(sources).map((s) =>
+      s === "memory" ? "專案記憶" : s === "style-kb" ? "風格知識庫" : "外部來源"
+    ).join("、");
+
+    const topEvidence = evidence[0]!;
+    const preview = topEvidence.snippet.slice(0, 150).replace(/\n/g, " ");
+
+    return `找到 ${evidence.length} 條證據（來源：${sourceLabels}）。最高相關度：${(topEvidence.confidence * 100).toFixed(0)}% — ${preview}...`;
+  }
+}
+
+export function createResearchEngine(opts: ResearchEngineOptions = {}): ResearchEngine {
+  return new ResearchEngine(opts);
+}

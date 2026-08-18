@@ -13,6 +13,7 @@ import { createEventRouter } from "./routes/events.js";
 import { createSandboxRouter } from "./routes/sandbox.js";
 import { createStrategyRouter } from "./routes/strategy.js";
 import { createCliRouter } from "./routes/cli.js";
+import { createResearchRouter } from "./routes/research.js";
 import { loadPolicies } from "./policy/loader.js";
 import { PolicyEngine } from "./policy/engine.js";
 import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.js";
@@ -21,6 +22,9 @@ import { createDefaultWorkerRegistry, type WorkerRegistry } from "./worker/regis
 import { PiWorker } from "./worker/pi-worker.js";
 import { McpServer, registerMcpRoutes } from "./mcp/server.js";
 import { AcpServer, registerAcpRoutes } from "./acp/server.js";
+import { getMemoryRetriever } from "./memory/retriever.js";
+import { StyleKnowledgeBase } from "./rag/style-kb.js";
+import { createResearchEngine } from "./research/engine.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -48,6 +52,9 @@ export interface AppDeps {
   registry: SandboxRegistry;
   verificationEngine: VerificationEngine;
   workerRegistry: WorkerRegistry;
+  memoryRetriever: ReturnType<typeof getMemoryRetriever>;
+  styleKb: StyleKnowledgeBase;
+  researchEngine: ReturnType<typeof createResearchEngine>;
 }
 
 export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
@@ -94,6 +101,11 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
       );
     },
   });
+
+  const memoryRetriever = getMemoryRetriever(`${config.dataDir}/.project-memory.db`);
+  const styleKb = new StyleKnowledgeBase(db);
+  const researchEngine = createResearchEngine({ memoryRetriever, styleKb });
+
   const app = Fastify({ logger: false });
 
   // §45.3 + §45.6：CORS — Tauri 2 webview 在 macOS 上以 `tauri://localhost` 載入前端，
@@ -118,6 +130,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   await app.register(createCliRouter, {
     deps: { taskManager, policies, policyEngine, verificationEngine, workerRegistry },
   });
+  await app.register(createResearchRouter, { deps: { researchEngine } });
 
   // §18/§19 協議層（Phase 6+ 預留；config.protocol 開關控制，預設 disabled）
   const mcpServer = config.protocol.mcp.enabled
@@ -148,6 +161,9 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
       registry,
       verificationEngine,
       workerRegistry,
+      memoryRetriever,
+      styleKb,
+      researchEngine,
       mcpServer,
       acpServer,
     },
