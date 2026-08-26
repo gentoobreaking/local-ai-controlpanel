@@ -125,6 +125,14 @@ async function main(): Promise<void> {
   for (const t of tasks) {
     const workspaceAbs = resolve(REPO_ROOT, TASKSET_DIR, t.workspace);
     for (let run = 1; run <= RUNS; run++) {
+      // 斷點續跑：已有結果檔則跳過（job 逾時後重啟不重跑）
+      const resultFile = resolve(outDir, `${MODE}-run${run}-${t.id}.json`);
+      if (existsSync(resultFile)) {
+        console.log(`⏭ [${t.id}] mode=${MODE} run=${run} 已有結果，跳過`);
+        const prev = JSON.parse(readFileSync(resultFile, "utf8")) as RunResult;
+        results.push(prev);
+        continue;
+      }
       resetWorkspace(t.workspace);
       console.log(`▶ [${t.id}] mode=${MODE} run=${run}`);
       const started = Date.now();
