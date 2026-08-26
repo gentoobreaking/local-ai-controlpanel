@@ -194,6 +194,8 @@ export function createRunner(
         break;
       case "repair_environment":
         step(task, "ARTIFACT_VALIDATION");
+        // 修復後重試：重新觸發 artifact 驗證/套用（先前無處理者→死胡同）
+        notifyArtifactValidation?.(task.id, task.workspace ?? undefined);
         break;
       case "stop":
       case "stronger_model":
@@ -537,6 +539,7 @@ export function createRunner(
       const task = taskManager.getRow(taskId);
       if (!task || task.status !== "ARTIFACT_VALIDATION") return;
       if (!ok) {
+        console.error(`[runner] ${taskId} artifact validation FAILED: ${reason ?? "?"}`);
         step(task, "REFLECTION");
         runReflection(task, reason ?? "artifact validation failed");
         return;
