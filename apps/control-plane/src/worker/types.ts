@@ -97,6 +97,15 @@ export interface CodingWorker {
   readonly id: string;
   initialize(context: WorkerContext): Promise<void>;
   execute(request: WorkerRequest): Promise<WorkerResult>;
+  /** Agentic 搜尋迴圈：模型自評證據是否足以實作（§16 延伸；可選能力）。 */
+  evaluateSufficiency?(input: {
+    objective: string;
+    evidenceDigest: string;
+    missingHistory: string[];
+  }): Promise<{
+    sufficient: boolean;
+    missing: string[];
+    queries: Array<{ query: string; reason?: string }>;
+  }>;
   interrupt(): Promise<void>;
-  shutdown(): Promise<void>;
 }

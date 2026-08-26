@@ -267,6 +267,71 @@ export class PiWorker implements CodingWorker {
     return this.runLlama(request, contract, started);
   }
 
+  /**
+   * Agentic 搜尋迴圈（§16 延伸）：模型自評證據是否足以實作。
+   * 只輸出 JSON——本方法不做 coding，僅供 Control Plane 決定是否繼續檢索。
+   */
+  async evaluateSufficiency(input: {
+    objective: string;
+    evidenceDigest: string;
+    missingHistory: string[];
+  }): Promise<{
+    sufficient: boolean;
+    missing: string[];
+    queries: Array<{ query: string; reason?: string }>;
+    raw?: string;
+  }> {
+    if (!this.client) {
+      return { sufficient: true, missing: [], queries: [] };
+    }
+    const system = [
+      "你是研究規劃員。判斷「現有證據」是否足以完成「目標任務」的程式實作。",
+      "只輸出 JSON，格式：",
+      '{"sufficient": boolean, "missing": ["還缺什麼具體知識"], "queries": [{"query": "英文搜尋關鍵字", "reason": "為什麼要查"}]}',
+      "規則：",
+      "- sufficient=true 時 queries 為空陣列",
+      "- sufficient=false 時 queries 至少一條、以英文技術關鍵字撰寫",
+      "- missing 需具體（如「requests.Session 的 timeout 參數語意」），不可籠統",
+    ].join("\n");
+    const user = [
+      `## 目標任務\n${input.objective}`,
+      `## 現有證據\n${input.evidenceDigest || "（無）"}`,
+      input.missingHistory.length
+        ? `## 先前已判定缺失（勿重複）\n${input.missingHistory.join("\n")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    try {
+      const result = await this.client.chat(
+        [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        { timeoutMs: Math.min(this.llamaTimeoutMs, 60_000) },
+      );
+      const text = result.text ?? "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return { sufficient: true, missing: [], queries: [], raw: text };
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        sufficient?: boolean;
+        missing?: string[];
+        queries?: Array<{ query: string; reason?: string }>;
+      };
+      return {
+        sufficient: parsed.sufficient === true,
+        missing: Array.isArray(parsed.missing) ? parsed.missing.filter((m) => typeof m === "string") : [],
+        queries: Array.isArray(parsed.queries)
+          ? parsed.queries.filter((q) => q && typeof q.query === "string")
+          : [],
+        raw: text,
+      };
+    } catch (err) {
+      console.error(`[pi-worker] evaluateSufficiency 失敗 → 視為 sufficient（不阻塞）：${(err as Error).message}`);
+      return { sufficient: true, missing: [], queries: [] };
+    }
+  }
+
   // ── llama 模式：真正呼叫 llama.cpp OpenAI-compatible endpoint ──────────
 
   private async runLlama(

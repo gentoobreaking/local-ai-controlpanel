@@ -15,6 +15,17 @@ export type StageEvent =
       output?: string;
       ts: string;
     }
+  | {
+      type: "search";
+      round: number;
+      maxRounds: number;
+      sufficient: boolean;
+      missing?: string[];
+      queries?: Array<{ query: string; reason?: string }>;
+      foundCount?: number;
+      sources?: string[];
+      ts: string;
+    }
   | { type: "reflection"; classification?: string; action?: string; ts: string }
   | { type: "done"; status: string; ts: string };
 

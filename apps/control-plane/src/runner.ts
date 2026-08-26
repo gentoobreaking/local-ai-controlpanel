@@ -7,11 +7,12 @@
 // emit SSE stage 事件、支援 cancel / approve。
 
 import { createStateMachine } from "./state/state-machine.js";
+import { classify, canRetry } from "./reflection/engine.js";
 import type { PolicyEngine } from "./policy/engine.js";
 import type { StageEvent, TaskBus } from "./events/bus.js";
 import type { TaskManager } from "./task/task-manager.js";
 import type { TaskRow, TaskStatus } from "./task/types.js";
-import { classify, canRetry } from "./reflection/engine.js";
+import type { CodingWorker } from "./worker/types.js";
 import type { EvidenceDecision } from "./evidence/gate.js";
 import { validateEvidenceGate } from "./evidence/gate.js";
 import type { ResearchSummary, TaskAnalysis } from "./policy/types.js";
@@ -49,13 +50,21 @@ export function createRunner(
     onArtifactValidation?: (taskId: string, workspace?: string) => void;
     /** T012 整合層：task 進入 VERIFYING 時觸發沙箱驗證。 */
     onVerificationRequired?: (taskId: string, workspace?: string) => void;
+    /** Agentic 搜尋迴圈：網路檢索執行器（GitHub MCP / PyPI / Scrapling）。 */
+    webSearch?: (query: string, language?: string) => Promise<
+      Array<{ title: string; snippet: string; confidence: number; metadata?: Record<string, unknown> }>
+    >;
+    /** Agentic 搜尋迴圈設定 */
+    agenticSearch?: { maxRounds: number };
   } = {},
 ): TaskRunner {
+  const notifyVerificationRequired = deps.onVerificationRequired;
+  const webSearchFn = deps.webSearch;
+  const agenticMaxRounds = deps.agenticSearch?.maxRounds ?? 10;
   const runningStages = new Map<string, { stage: TaskStatus; attempt: number }>();
   const researchState = new Map<string, { retries: number; task: TaskRow }>();
   const workerState = new Map<string, { request: WorkerRequest; attempt: number }>();
   const notifyArtifactValidation = deps.onArtifactValidation;
-  const notifyVerificationRequired = deps.onVerificationRequired;
   /** T021 §16：task → 上一輪驗證失敗輸出（重試時注入 worker request 回饋給模型）。 */
   const verificationFeedback = new Map<string, string>();
   const workerRegistry = deps.workerRegistry;
@@ -265,6 +274,104 @@ export function createRunner(
       researchRequired: true,
       researchReasons: ["unknown_dependency"],
     };
+  }
+
+  /**
+   * Agentic 搜尋迴圈（§16 延伸）：模型自評證據缺口 → 迭代查詢 → 落庫供 coding 使用。
+   * 結構性保證：SEARCHING 狀態內每輪必查（退化偵測 + 硬上限防打轉）。
+   */
+  async function runAgenticSearch(task: TaskRow, worker: CodingWorker): Promise<void> {
+    const language = task.workspace?.split(".").pop() === "py" ? "python" : undefined;
+    const seenQueries = new Set<string>();
+    const missingHistory: string[] = [];
+    let barrenRounds = 0;
+
+    for (let round = 1; round <= agenticMaxRounds; round++) {
+      const digest = taskManager
+        .getEvidence(task.id)
+        .map((e) => `- [${e.sourceType}] ${e.claim.slice(0, 150)}`)
+        .join("\n");
+
+      let verdict: Awaited<ReturnType<NonNullable<CodingWorker["evaluateSufficiency"]>>>;
+      try {
+        verdict = await worker.evaluateSufficiency!({
+          objective: task.request ?? "",
+          evidenceDigest: digest,
+          missingHistory,
+        });
+      } catch {
+        break; // 模型評估失敗 → 帶現有證據繼續
+      }
+
+      if (verdict.missing.length) missingHistory.push(...verdict.missing);
+
+      // 退化偵測：新查詢全部重複 → 強制收斂
+      const fresh = verdict.queries.filter((q) => {
+        const norm = q.query.trim().toLowerCase();
+        if (seenQueries.has(norm)) return false;
+        seenQueries.add(norm);
+        return true;
+      });
+
+      emit(task.id, {
+        type: "search",
+        round,
+        maxRounds: agenticMaxRounds,
+        sufficient: verdict.sufficient || fresh.length === 0 && verdict.missing.length === 0,
+        missing: verdict.missing,
+        queries: fresh,
+        ts: new Date().toISOString(),
+      });
+
+      if (verdict.sufficient || fresh.length === 0) {
+        console.error(`[runner] ${task.id} agentic search 收斂於 round ${round}`);
+        return;
+      }
+
+      // 執行檢索（CP 側有網路；沙箱外）→ 證據落庫 → 自動流入 worker contract
+      const facts: Array<{ claim: string; sourceUri: string; sourceType: string; confidence: number }> = [];
+      const sources: string[] = [];
+      for (const q of fresh.slice(0, 3)) {
+        try {
+          const results = webSearchFn
+            ? await webSearchFn(q.query, language)
+            : [];
+          for (const r of results) {
+            facts.push({
+              claim: `${r.title}\n${r.snippet}`,
+              sourceUri: String(r.metadata?.url ?? `search:${q.query}`),
+              sourceType: "documentation",
+              confidence: r.confidence ?? 0.65,
+            });
+            sources.push(String(r.metadata?.origin ?? "web"));
+          }
+        } catch {
+          // 單一查詢失敗 → 忽略
+        }
+      }
+
+      emit(task.id, {
+        type: "search",
+        round,
+        maxRounds: agenticMaxRounds,
+        sufficient: false,
+        foundCount: facts.length,
+        sources: [...new Set(sources)],
+        ts: new Date().toISOString(),
+      });
+
+      if (facts.length === 0) {
+        barrenRounds += 1;
+        if (barrenRounds >= 2) {
+          console.error(`[runner] ${task.id} 連續 ${barrenRounds} 輪無新資訊 → 收斂`);
+          return;
+        }
+      } else {
+        barrenRounds = 0;
+        taskManager.recordEvidence(task.id, facts);
+      }
+    }
+    console.error(`[runner] ${task.id} agentic search 達上限 ${agenticMaxRounds} 輪 → 帶現有證據實作`);
   }
 
   /**

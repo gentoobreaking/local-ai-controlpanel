@@ -35,7 +35,10 @@ export interface ExecutionConfig {
   phase: number;
   /** 是否允許 Cloud（Phase 9+ 才生效） */
   allowCloud: boolean;
-  /** Cloud 成本上限（USD/天） */
+  /** Agentic 搜尋迴圈：IMPLEMENTING 前讓模型自評缺口並迭代查詢（§16 延伸） */
+  agenticSearch: boolean;
+  /** 搜尋迴圈硬上限（防無限燒 token） */
+  maxSearchRounds: number;
   maxDailyCostUsd?: number;
   /** Cloud token 上限（per task） */
   maxTokensPerTask?: number;
@@ -92,6 +95,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     execution: {
       phase: Number(env.CP_PHASE ?? 1),
       allowCloud: env.CP_ALLOW_CLOUD === "1" || env.CP_ALLOW_CLOUD === "true",
+      agenticSearch: env.CP_AGENTIC_SEARCH !== "0" && env.CP_AGENTIC_SEARCH !== "false",
+      maxSearchRounds: Math.max(1, Number(env.CP_MAX_SEARCH_ROUNDS ?? 10)),
       maxDailyCostUsd: env.CP_MAX_DAILY_COST_USD ? Number(env.CP_MAX_DAILY_COST_USD) : undefined,
       maxTokensPerTask: env.CP_MAX_TOKENS_PER_TASK ? Number(env.CP_MAX_TOKENS_PER_TASK) : undefined,
     },
