@@ -44,6 +44,11 @@ export interface PiAgentWorkerOptions {
   >;
   /** SSE 事件橋接（每輪搜尋／工具呼叫送前端） */
   onEvent?: (taskId: string, event: Record<string, unknown>) => void;
+  /** 證據落庫（Rule 3：落庫的 evidence 才可進入後續重試的 contract） */
+  onPersistEvidence?: (
+    taskId: string,
+    facts: Array<{ claim: string; sourceUri: string; sourceType: string; confidence: number }>,
+  ) => void;
   /** ReAct 迴圈硬上限（預設 10） */
   maxRounds?: number;
   /** llama 生成逾時（預設 300s） */
@@ -98,12 +103,14 @@ export class PiAgentWorker implements CodingWorker {
   readonly id = "pi-local";
   private ctx: WorkerContext | null = null;
   private readonly onEvent?: PiAgentWorkerOptions["onEvent"];
+  private readonly onPersistEvidence?: PiAgentWorkerOptions["onPersistEvidence"];
   private readonly webSearch?: PiAgentWorkerOptions["webSearch"];
   private readonly maxRounds: number;
   private readonly llamaTimeoutMs: number;
 
   constructor(opts: PiAgentWorkerOptions = {}) {
     this.onEvent = opts.onEvent;
+    this.onPersistEvidence = opts.onPersistEvidence;
     this.webSearch = opts.webSearch;
     this.maxRounds = opts.maxRounds ?? 10;
     this.llamaTimeoutMs = opts.llamaTimeoutMs ?? 300_000;
@@ -165,6 +172,9 @@ export class PiAgentWorker implements CodingWorker {
       );
     }
 
+    if (stats.facts.length) {
+      this.onPersistEvidence?.(request.task.id, stats.facts);
+    }
     this.onEvent?.(request.task.id, {
       type: "search",
       round: stats.searches,

@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "description": "L0/L1/L2 分級任務集：驗證「小模型 + 網路研究」的能力增益。L0 為控制組（模型原生能力），L1 需 API 用法知識，L2 需版本特定知識（訓練資料罕見）。",
+  "protocol": {
+    "runsPerTask": { "researchOff": 5, "researchOn": 5 },
+    "workspace": "每個目錄即獨立 git workspace",
+    "verification": "沙箱內 python3 -m pytest tests/ -q；lint: ruff check src/ tests/",
+    "baseline": "每題初始 commit 即失敗基線——驗證必須先紅後綠"
+  },
+  "tasks": [
+    {
+      "id": "L0-calc-divzero",
+      "level": "L0",
+      "workspace": "L0-calc-divzero",
+      "request": "src/calc.py 的 divide(a,b) 在 b=0 時應拋出 ValueError 而非 ZeroDivisionError。不可更動 tests/。",
+      "knowledge_points": ["基本 Python 例外處理"],
+      "expected_model_capability": "7B 原生即可完成，不需查詢"
+    },
+    {
+      "id": "L0-str-reverse",
+      "level": "L0",
+      "workspace": "L0-str-reverse",
+      "request": "修復 src/strutil.py 的 reverse_words：目前沒有反轉詞序。不可更動 tests/。",
+      "knowledge_points": ["str.split/join 基本用法"],
+      "expected_model_capability": "7B 原生即可完成"
+    },
+    {
+      "id": "L1-requests-upload",
+      "level": "L1",
+      "workspace": "L1-requests-upload",
+      "request": "實作 src/uploader.py 的 upload_file：以 requests 發送 multipart 檔案上傳（欄位名 file），強制 timeout 參數。離線測試以 mock 驗證 API 用法。不可更動 tests/。",
+      "knowledge_points": [
+        "requests files= multipart 上傳語法",
+        "requests timeout 參數傳遞方式"
+      ],
+      "expected_evidence_queries": ["requests upload file multipart example", "requests post files parameter timeout"],
+      "hypothesis": "7B 可能用 data=/json= 誤用或遺漏 timeout → 查文件後修正"
+    },
+    {
+      "id": "L1-sqlalchemy-select",
+      "level": "L1",
+      "workspace": "L1-sqlalchemy-select",
+      "request": "實作 src/repo.py 的 find_by_name：使用 SQLAlchemy 2.0 的 select() + where 新式語法精確比對 name。不可更動 tests/。",
+      "knowledge_points": [
+        "SQLAlchemy 2.0 select() 語法",
+        "Session.execute() + scalars() 的正確搭配"
+      ],
+      "expected_evidence_queries": ["sqlalchemy 2.0 select where example", "sqlalchemy session execute scalars"],
+      "hypothesis": "7B 易混用 1.x Query API（已移除）→ 查官方遷移文件後修正"
+    },
+    {
+      "id": "L2-pydantic-v2-migration",
+      "level": "L2",
+      "workspace": "L2-pydantic-v2-migration",
+      "request": "src/models.py 以 pydantic v1 語法撰寫，環境為 pydantic v2。遷移至 v2 對應寫法（field_validator、ConfigDict.from_attributes），行為不得改變。不可更動 tests/。",
+      "knowledge_points": [
+        "@validator → @field_validator（含 mode 語意差異）",
+        "class Config orm_mode → model_config = ConfigDict(from_attributes=True)",
+        "v2 validator 回傳值語意（必須 return v）"
+      ],
+      "expected_evidence_queries": ["pydantic v2 migration field_validator", "pydantic v2 ConfigDict from_attributes"],
+      "hypothesis": "7B 訓練資料以 v1 為主 → 無研究幾乎必然失敗；查官方遷移指南後可解。此題為 CP Gain 最強訊號"
+    },
+    {
+      "id": "L2-datetime-utc-deprecated",
+      "level": "L2",
+      "workspace": "L2-datetime-utc-deprecated",
+      "request": "src/timestamps.py 使用 Python 3.12 已棄用的 datetime.utcnow()/utcfromtimestamp()。改為 timezone-aware 寫法且行為等價（測試會將 DeprecationWarning 視為錯誤）。不可更動 tests/。",
+      "knowledge_points": [
+        "datetime.now(timezone.utc) 取代 utcnow()",
+        "datetime.fromtimestamp(secs, tz=timezone.utc) 取代 utcfromtimestamp()"
+      ],
+      "expected_evidence_queries": ["datetime utcnow deprecated replacement", "python 3.12 utcfromtimestamp timezone aware"],
+      "hypothesis": "7B 常見的 naive datetime 習慣 → 需確認 aware 版本的等價轉換細節"
+    }
+  ]
+}

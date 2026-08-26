@@ -54,8 +54,15 @@ test("evaluateTask: high risk 一律 REQUIRE_RESEARCH（§10 風險規則）", (
 });
 
 test("evaluateArtifact: allowed 內 → APPROVED", () => {
-  const d = engine.evaluateArtifact(["src/main.ts", "tests/foo.test.ts"]);
+  // 安全補強後 tests/** 為 readonly——allowed 僅涵蓋產品碼路徑
+  const d = engine.evaluateArtifact(["src/main.ts", "lib/util.ts"]);
   assert.deepEqual(d, { verdict: "APPROVED", violations: [] });
+});
+
+test("evaluateArtifact: tests/** 為 readonly → DENIED（防改斷言讓測試變綠）", () => {
+  const d = engine.evaluateArtifact(["src/main.ts", "tests/foo.test.ts"]);
+  assert.equal(d.verdict, "DENIED");
+  assert.deepEqual(d.violations, [{ file: "tests/foo.test.ts", rule: "readonly" }]);
 });
 
 test("evaluateArtifact: forbidden → DENIED", () => {

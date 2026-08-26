@@ -92,6 +92,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
               Array<{ title: string; snippet: string; confidence: number; metadata?: Record<string, unknown> }>
             >,
           onEvent: (taskId, event) => bus.emit(taskId, event as never),
+          onPersistEvidence: (tid, facts) => taskManager.recordEvidence(tid, facts),
           maxRounds: config.execution.maxSearchRounds,
           llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
         }) as never)

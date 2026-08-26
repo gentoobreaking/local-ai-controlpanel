@@ -45,8 +45,10 @@ artifact:
   allowed:
     - "src/**"
     - "lib/**"
-    - "tests/**"
   readonly:
+    # 測試為驗收基準：模型不得更動（防「改斷言讓測試變綠」）
+    - "tests/**"
+    - "test/**"
     - "package-lock.json"
     - "go.mod"
     - "go.sum"
