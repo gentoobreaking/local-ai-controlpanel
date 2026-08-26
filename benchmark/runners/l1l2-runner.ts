@@ -56,6 +56,7 @@ let tasks = taskset.tasks;
 if (ONLY) tasks = tasks.filter((t) => ONLY.includes(t.id));
 
 const REPO_ROOT = resolve(process.cwd(), "..", "..");
+console.error(`[runner] cwd=${process.cwd()} REPO_ROOT=${REPO_ROOT}`);
 
 function resetWorkspace(fixtureDir: string): void {
   const abs = resolve(REPO_ROOT, TASKSET_DIR, fixtureDir);
@@ -122,7 +123,7 @@ async function main(): Promise<void> {
   const results: RunResult[] = [];
 
   for (const t of tasks) {
-    const workspaceAbs = `${REPO_ROOT}${TASKSET_DIR}/${t.workspace}`;
+    const workspaceAbs = resolve(REPO_ROOT, TASKSET_DIR, t.workspace);
     for (let run = 1; run <= RUNS; run++) {
       resetWorkspace(t.workspace);
       console.log(`▶ [${t.id}] mode=${MODE} run=${run}`);
