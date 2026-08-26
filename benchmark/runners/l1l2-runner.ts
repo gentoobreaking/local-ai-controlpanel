@@ -82,7 +82,7 @@ function delay(ms: number): Promise<void> {
   return promise;
 }
 
-async function waitForTerminal(id: string, timeoutMs = 300_000): Promise<{ status: string; attempt: number }> {
+async function waitForTerminal(id: string, timeoutMs = 900_000): Promise<{ status: string; attempt: number }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await delay(5000);

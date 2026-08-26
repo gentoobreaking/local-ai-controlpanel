@@ -513,6 +513,13 @@ export function createRunner(
       if (!task || task.status !== "ASK_USER") return;
       taskManager.updateStatus(taskId, "PLANNING");
       emitStage(taskId, taskManager.getRow(taskId)!);
+      // 核准後恢復執行：PLANNING → WORKER_SELECTION → IMPLEMENTING → Worker
+      // （先前只改狀態無人接手——pipeline 卡死在 PLANNING 的整合斷點）
+      const cur = taskManager.getRow(taskId)!;
+      step(cur, "WORKER_SELECTION");
+      const cur2 = taskManager.getRow(taskId)!;
+      step(cur2, "IMPLEMENTING");
+      void runWorker(taskManager.getRow(taskId)!);
     },
     reportResearch(taskId, summary, stage1) {
       const task = taskManager.getRow(taskId);
