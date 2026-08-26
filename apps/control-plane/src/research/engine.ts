@@ -189,11 +189,13 @@ export class ResearchEngine {
   private memoryRetriever: any;
   private styleKb: any;
   private externalSearch?: (query: string) => Promise<EvidenceSource[]>;
+  private webSearch?: (query: string, language?: string) => Promise<EvidenceSource[]>;
 
   constructor(opts: ResearchEngineOptions = {}) {
     this.memoryRetriever = opts.memoryRetriever;
     this.styleKb = opts.styleKb;
     this.externalSearch = opts.externalSearch;
+    this.webSearch = opts.webSearch;
   }
 
   async research(query: ResearchQuery): Promise<ResearchResult> {
@@ -259,6 +261,15 @@ export class ResearchEngine {
         } catch {
           // ignore external search failures
         }
+      }
+    }
+
+    if (this.webSearch) {
+      try {
+        const web = await this.webSearch(queryText, language);
+        allEvidence.push(...web);
+      } catch {
+        // 網路檢索失敗 → 靜默降級（本地來源仍可用）
       }
     }
 

@@ -19,6 +19,14 @@ export interface ProtocolConfig {
     yfinance: { enabled: boolean };
     /** 2nd Backup: FinMind-MCP (PyPI，需 FINMIND_TOKEN) */
     finmind: { enabled: boolean };
+    /** 研究層：GitHub 官方 MCP（repo/code search、README；需 GITHUB_TOKEN） */
+    github: {
+      enabled: boolean;
+      transport: "docker" | "binary" | "remote";
+      remoteUrl?: string;
+    };
+    /** 研究層：Scrapling MCP（網頁抓取→Markdown、反反爬；pip install "scrapling[ai]"） */
+    scrapling: { enabled: boolean; command: string };
   };
 }
 
@@ -69,6 +77,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         },
         finmind: {
           enabled: env.CP_MCP_FINMIND_ENABLED === "1" || env.CP_MCP_FINMIND_ENABLED === "true",
+        },
+        github: {
+          enabled: env.CP_MCP_GITHUB_ENABLED !== "0" && env.CP_MCP_GITHUB_ENABLED !== "false",
+          transport: (env.CP_MCP_GITHUB_TRANSPORT as "docker" | "binary" | "remote") ?? "docker",
+          remoteUrl: env.CP_MCP_GITHUB_REMOTE_URL,
+        },
+        scrapling: {
+          enabled: env.CP_MCP_SCRAPLING_ENABLED === "1" || env.CP_MCP_SCRAPLING_ENABLED === "true",
+          command: env.CP_MCP_SCRAPLING_CMD ?? "scrapling-mcp",
         },
       },
     },

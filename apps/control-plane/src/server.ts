@@ -31,6 +31,7 @@ import { AcpServer, registerAcpRoutes } from "./acp/server.js";
 import { getMemoryRetriever } from "./memory/retriever.js";
 import { StyleKnowledgeBase } from "./rag/style-kb.js";
 import { createResearchEngine } from "./research/engine.js";
+import { createWebRetriever } from "./research/web-retriever.js";
 import { createEvidenceModel } from "./evidence/model.js";
 import { createEvidenceGate } from "./evidence/gate-api.js";
 import { createArtifactController } from "./artifact/controller.js";
@@ -126,7 +127,16 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   });
   const memoryRetriever = getMemoryRetriever(`${config.dataDir}/.project-memory.db`);
   const styleKb = new StyleKnowledgeBase(db);
-  const researchEngine = createResearchEngine({ memoryRetriever, styleKb });
+  // 研究層網路檢索：GitHub MCP / PyPI / Scrapling MCP（延遲連線，best-effort）
+  const webRetriever = createWebRetriever({
+    config: config.protocol.mcpServers,
+    githubToken: process.env.GITHUB_TOKEN,
+  });
+  const researchEngine = createResearchEngine({
+    memoryRetriever,
+    styleKb,
+    webSearch: (query, language) => webRetriever.retrieve(query, language),
+  });
   // 綁定：研究完成 → reportResearch 推進 pipeline（COMPLETE/PARTIAL/FAILED 皆回報）。
   researchTrigger = (taskId, query, workspace) => {
     // 從任務描述粗略偵測語言（StyleKB 搜尋需要精確 language 過濾）

@@ -11,6 +11,14 @@ export interface ResearchQuery {
   maxAgeDays?: number;
 }
 
+export interface ResearchEngineOptions {
+  memoryRetriever?: any;
+  styleKb?: any;
+  externalSearch?: (query: string) => Promise<EvidenceSource[]>;
+  /** 網路檢索（GitHub MCP / PyPI / Scrapling）；帶語言以便路由。 */
+  webSearch?: (query: string, language?: string) => Promise<EvidenceSource[]>;
+}
+
 export interface EvidenceSource {
   type: "memory" | "style-kb" | "external";
   id: string;
