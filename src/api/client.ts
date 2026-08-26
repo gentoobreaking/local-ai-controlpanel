@@ -59,6 +59,18 @@ export type StageEvent =
       ts: string;
     }
   | {
+      type: "search";
+      round: number;
+      maxRounds: number;
+      sufficient: boolean;
+      missing?: string[];
+      queries?: Array<{ query: string; reason?: string }>;
+      foundCount?: number;
+      sources?: string[];
+      ts: string;
+    }
+  | { type: "tool_execution_start"; toolName?: string; ts: string }
+  | {
       type: "reflection";
       classification?: string;
       action?: string;

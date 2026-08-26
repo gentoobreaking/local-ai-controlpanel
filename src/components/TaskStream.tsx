@@ -28,6 +28,25 @@ function renderEvent(event: StageEvent): { line: string; cls: string; output?: s
         line: `reflection → ${event.classification ?? ""}${event.action ? ` (${event.action})` : ""}`,
         cls: "ev-reflection",
       };
+    case "search": {
+      const ev = event as Extract<StageEvent, { type: "search" }>;
+      if (ev.queries?.length) {
+        const qs = ev.queries.map((q) => q.query).join(" | ");
+        return {
+          line: `🔍 search r${ev.round}/${ev.maxRounds} → ${qs}`,
+          cls: "ev-search",
+        };
+      }
+      const parts = [`🔍 found ${ev.foundCount ?? 0}`];
+      if (ev.sources?.length) parts.push(`(${ev.sources.join(", ")})`);
+      if (ev.sufficient) parts.push("✓ sufficient");
+      return { line: parts.join(" "), cls: "ev-search" };
+    }
+    case "tool_execution_start":
+      return {
+        line: `🔧 ${event.toolName ?? "tool"}()`,
+        cls: "ev-search",
+      };
     case "done":
       return { line: `done → ${event.status}`, cls: "ev-done" };
   }

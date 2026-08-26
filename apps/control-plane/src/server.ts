@@ -26,6 +26,7 @@ import { createDefaultRegistry, type SandboxRegistry } from "./sandbox/registry.
 import { VerificationEngine } from "./verification/engine.js";
 import { createDefaultWorkerRegistry, type WorkerRegistry } from "./worker/registry.js";
 import { PiWorker } from "./worker/pi-worker.js";
+import { PiAgentWorker } from "./worker/pi-agent-worker.js";
 import { McpServer, registerMcpRoutes } from "./mcp/server.js";
 import { AcpServer, registerAcpRoutes } from "./acp/server.js";
 import { getMemoryRetriever } from "./memory/retriever.js";
@@ -81,11 +82,22 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     phase: config.execution.phase,
     allowCloud: config.execution.allowCloud,
   });
+  // Agentic 模式：PiAgentWorker 內建 ReAct 迴圈（先查後寫）；否則單發 PiWorker
+  let webRetrieveFn: ((query: string, language?: string) => Promise<unknown>) | null = null;
   const workerRegistry = createDefaultWorkerRegistry({
-    // llama 模式生成超時可經由 env 覆寫（預設 5 分鐘，7B CPU 生成 patch 需 30–120s）
-    piWorker: new PiWorker({
-      llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
-    }),
+    piWorker: config.execution.agenticSearch
+      ? (new PiAgentWorker({
+          webSearch: (query, language) =>
+            (webRetrieveFn?.(query, language) ?? Promise.resolve([])) as Promise<
+              Array<{ title: string; snippet: string; confidence: number; metadata?: Record<string, unknown> }>
+            >,
+          onEvent: (taskId, event) => bus.emit(taskId, event as never),
+          maxRounds: config.execution.maxSearchRounds,
+          llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
+        }) as never)
+      : new PiWorker({
+          llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
+        }),
     model: process.env.LLAMA_MODEL,
   });
   const registry = createDefaultRegistry({
@@ -132,6 +144,7 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     config: config.protocol.mcpServers,
     githubToken: process.env.GITHUB_TOKEN,
   });
+  webRetrieveFn = (query: string, language?: string) => webRetriever.retrieve(query, language);
   const researchEngine = createResearchEngine({
     memoryRetriever,
     styleKb,
