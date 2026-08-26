@@ -288,6 +288,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 - **規格書**：`~/tasks/local-ai-controlpanel/agent-control-plane-spec-v0.5.md`
 - **端到端整合測試報告**：[E2E-INTEGRATION-TEST-REPORT.md](./E2E-INTEGRATION-TEST-REPORT.md)
+- **Agentic 搜尋工作紀錄**：[AGENTIC-SEARCH-WORKLOG.md](./AGENTIC-SEARCH-WORKLOG.md)
 - **變更紀錄**：[CHANG_LOG.md](./CHANG_LOG.md)
 
 ---
