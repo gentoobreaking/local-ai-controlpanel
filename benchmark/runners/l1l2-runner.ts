@@ -166,7 +166,7 @@ async function main(): Promise<void> {
         `  → ${result.status} success=${result.success} attempts=${result.attempts} ${result.durationSec}s`,
       );
       writeFileSync(
-        `${outDir}${MODE}-run${run}-${t.id}.json`,
+        `resolve(outDir, `${MODE}-run${run}-${t.id}.json`)`,
         JSON.stringify(result, null, 2),
       );
     }
