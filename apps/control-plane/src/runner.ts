@@ -357,6 +357,11 @@ export function createRunner(
         sufficient: false,
         foundCount: facts.length,
         sources: [...new Set(sources)],
+        evidence: facts.map((f) => ({
+          title: f.claim.split("\n")[0] ?? "",
+          url: f.sourceUri,
+          snippet: f.claim.slice(0, 400),
+        })),
         ts: new Date().toISOString(),
       });
 

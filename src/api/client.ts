@@ -67,6 +67,7 @@ export type StageEvent =
       queries?: Array<{ query: string; reason?: string }>;
       foundCount?: number;
       sources?: string[];
+      evidence?: Array<{ title?: string; url?: string; snippet?: string }>;
       ts: string;
     }
   | { type: "tool_execution_start"; toolName?: string; ts: string }

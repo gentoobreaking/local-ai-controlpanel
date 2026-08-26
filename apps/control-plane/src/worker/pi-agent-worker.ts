@@ -218,6 +218,24 @@ export class PiAgentWorker implements CodingWorker {
           console.error(
             `[pi-agent-worker] web_search("${params.query}") → ${results.length} results`,
           );
+          // 即時觀測事件：查詢 + 證據內容送前端（§16 觀測層）
+          if (this.onEvent && request.task.id) {
+            this.onEvent(request.task.id, {
+              type: "search",
+              round: stats.searches,
+              maxRounds: this.maxRounds,
+              sufficient: false,
+              queries: [{ query: params.query }],
+              foundCount: results.length,
+              sources: [...new Set(results.map((r) => String(r.metadata?.origin ?? "web")))],
+              evidence: results.map((r) => ({
+                title: r.title,
+                url: String(r.metadata?.url ?? ""),
+                snippet: r.snippet.slice(0, 400),
+              })),
+              ts: new Date().toISOString(),
+            });
+          }
           return {
             content: [{ type: "text", text: body }],
             details: { count: results.length },

@@ -24,6 +24,7 @@ export type StageEvent =
       queries?: Array<{ query: string; reason?: string }>;
       foundCount?: number;
       sources?: string[];
+      evidence?: Array<{ title?: string; url?: string; snippet?: string }>;
       ts: string;
     }
   | { type: "reflection"; classification?: string; action?: string; ts: string }
