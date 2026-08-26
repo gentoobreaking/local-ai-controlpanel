@@ -28,24 +28,38 @@ export interface TaskRunner {
   reportResearch(taskId: string, summary: ResearchSummary, stage1: "COMPLETE" | "PARTIAL" | "FAILED"): void;
   /** 回報 verification 失敗（T020 接入 reflection）。 */
   reportVerificationFailure(taskId: string, output: string): void;
-  /** 目前進行的階段（供 SSE 重連 replay 快照）。 */
-  getStage(taskId: string): { stage: TaskStatus; attempt: number } | undefined;
+  /** T040 整合層回報：artifact 驗證（policy + git dry-run）結果。 */
+  reportArtifactValidation(taskId: string, ok: boolean, reason?: string): void;
+  reportVerificationResult(taskId: string, ok: boolean, output: string): void;
   /** T021：回報 worker 執行結果（產出 patch）。 */
   reportWorkerResult(taskId: string, result: WorkerResult): void;
+  /** 目前進行的階段（供 SSE 重連 replay 快照）。 */
+  getStage(taskId: string): { stage: TaskStatus; attempt: number } | undefined;
 }
 
 export function createRunner(
   taskManager: TaskManager,
   bus: TaskBus,
   policyEngine: PolicyEngine,
-  deps: { workerRegistry?: WorkerRegistry } = {},
+  deps: {
+    workerRegistry?: WorkerRegistry;
+    /** T017 整合層：task 進入 RESEARCHING 時觸發研究，完成後呼叫 reportResearch()。 */
+    onResearchRequired?: (taskId: string, query: string, workspace?: string) => void;
+    /** T011/T040 整合層：task 進入 ARTIFACT_VALIDATION 時觸發 patch 驗證+套用。 */
+    onArtifactValidation?: (taskId: string, workspace?: string) => void;
+    /** T012 整合層：task 進入 VERIFYING 時觸發沙箱驗證。 */
+    onVerificationRequired?: (taskId: string, workspace?: string) => void;
+  } = {},
 ): TaskRunner {
   const runningStages = new Map<string, { stage: TaskStatus; attempt: number }>();
   const researchState = new Map<string, { retries: number; task: TaskRow }>();
   const workerState = new Map<string, { request: WorkerRequest; attempt: number }>();
+  const notifyArtifactValidation = deps.onArtifactValidation;
+  const notifyVerificationRequired = deps.onVerificationRequired;
   /** T021 §16：task → 上一輪驗證失敗輸出（重試時注入 worker request 回饋給模型）。 */
   const verificationFeedback = new Map<string, string>();
   const workerRegistry = deps.workerRegistry;
+  const notifyResearchRequired = deps.onResearchRequired;
   const router = workerRegistry ? new WorkerRouter(workerRegistry) : null;
   // Worker 初始化 context：llama.cpp baseUrl 由環境變數設定（§16 設定化）
   const llmBaseUrl = process.env.LLAMA_BASE_URL ?? "http://127.0.0.1:8080";
@@ -106,6 +120,7 @@ export function createRunner(
         break;
       case "RESEARCH_AGAIN": {
         const nextRetries = retries + 1;
+        notifyResearchRequired?.(task.id, task.request, task.workspace ?? undefined);
         researchState.set(task.id, { retries: nextRetries, task });
         step(task, "RESEARCHING");
         emit(task.id, {
@@ -162,6 +177,7 @@ export function createRunner(
         break;
       case "research":
         step(task, "RESEARCH_REQUIRED");
+        notifyResearchRequired?.(task.id, task.request, task.workspace ?? undefined);
         step(task, "RESEARCHING");
         break;
       case "ask_user":
@@ -223,6 +239,7 @@ export function createRunner(
           } else {
             // 研究需求確定 → 立即啟動 research（進入 RESEARCHING 等待 reportResearch）
             researchState.set(task.id, { retries: 0, task });
+            notifyResearchRequired?.(task.id, task.request, task.workspace ?? undefined);
             step(task, "RESEARCH_REQUIRED");
             step(task, "RESEARCHING");
           }
@@ -350,6 +367,7 @@ export function createRunner(
         );
       }
       step(task, "ARTIFACT_VALIDATION");
+      notifyArtifactValidation?.(taskId, task.workspace ?? undefined);
     } else {
       // 失敗 → REFLECTION（T020 分類 → retry / research / ask_user / stop）
       taskManager.recordAttempt(
@@ -392,6 +410,28 @@ export function createRunner(
     reportVerificationFailure(taskId, output) {
       const task = taskManager.getRow(taskId);
       if (!task || task.status !== "VERIFYING") return;
+      verificationFeedback.set(taskId, output);
+      step(task, "REFLECTION");
+      runReflection(task, output);
+    },
+    reportArtifactValidation(taskId, ok, reason) {
+      const task = taskManager.getRow(taskId);
+      if (!task || task.status !== "ARTIFACT_VALIDATION") return;
+      if (!ok) {
+        step(task, "REFLECTION");
+        runReflection(task, reason ?? "artifact validation failed");
+        return;
+      }
+      step(task, "VERIFYING");
+      notifyVerificationRequired?.(taskId, task.workspace ?? undefined);
+    },
+    reportVerificationResult(taskId, ok, output) {
+      const task = taskManager.getRow(taskId);
+      if (!task || task.status !== "VERIFYING") return;
+      if (ok) {
+        step(task, "COMPLETE");
+        return;
+      }
       verificationFeedback.set(taskId, output);
       step(task, "REFLECTION");
       runReflection(task, output);

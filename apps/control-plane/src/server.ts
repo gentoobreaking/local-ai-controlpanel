@@ -11,8 +11,10 @@ import { createRunner } from "./runner.js";
 import { createTaskRouter } from "./routes/tasks.js";
 import { createEventRouter } from "./routes/events.js";
 import { createSandboxRouter } from "./routes/sandbox.js";
-import { createStrategyRouter } from "./routes/strategy.js";
 import { createCliRouter } from "./routes/cli.js";
+import { buildVerificationContext } from "./verification/context.js";
+import { DEFAULT_VERIFIERS } from "./verification/verifiers.js";
+import { createStrategyRouter } from "./routes/strategy.js";
 import { createResearchRouter } from "./routes/research.js";
 import { createEvidenceRouter } from "./routes/evidence.js";
 import { createEvidenceGateRouter } from "./routes/evidence-gate.js";
@@ -83,10 +85,20 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
     piWorker: new PiWorker({
       llamaTimeoutMs: Number(process.env.LLAMA_TIMEOUT_MS ?? 300_000),
     }),
+    model: process.env.LLAMA_MODEL,
   });
-  const runner = createRunner(taskManager, bus, policyEngine, { workerRegistry });
   const registry = createDefaultRegistry({
     seatbeltProfile: resolveSeatbeltProfile(policies),
+  });
+  // T017/T040/T012 整合層：三個 hook 皆在 runner 之後建立依賴 → 用延遲綁定接線。
+  let researchTrigger: ((taskId: string, query: string, workspace?: string) => void) | null = null;
+  let artifactTrigger: ((taskId: string, workspace?: string) => void) | null = null;
+  let verifyingTrigger: ((taskId: string, workspace?: string) => void) | null = null;
+  const runner = createRunner(taskManager, bus, policyEngine, {
+    workerRegistry,
+    onResearchRequired: (taskId, query, workspace) => researchTrigger?.(taskId, query, workspace),
+    onArtifactValidation: (taskId, workspace) => artifactTrigger?.(taskId, workspace),
+    onVerificationRequired: (taskId, workspace) => verifyingTrigger?.(taskId, workspace),
   });
   const verificationEngine = new VerificationEngine({
     registry,
@@ -112,18 +124,103 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
       );
     },
   });
-
   const memoryRetriever = getMemoryRetriever(`${config.dataDir}/.project-memory.db`);
   const styleKb = new StyleKnowledgeBase(db);
   const researchEngine = createResearchEngine({ memoryRetriever, styleKb });
+  // 綁定：研究完成 → reportResearch 推進 pipeline（COMPLETE/PARTIAL/FAILED 皆回報）。
+  researchTrigger = (taskId, query, workspace) => {
+    // 從任務描述粗略偵測語言（StyleKB 搜尋需要精確 language 過濾）
+    const lang = /\.py\b|python/i.test(query)
+      ? "python"
+      : /\.(ts|tsx)\b|typescript/i.test(query)
+        ? "typescript"
+        : /\.(go)\b|golang/i.test(query)
+          ? "go"
+          : "unknown";
+    // 專案名 = workspace 路徑最後一段（與 PiWorker T032 慣例一致）
+    const projectName = workspace?.split("/").filter(Boolean).pop();
+    void researchEngine
+      .research({ taskId, query, language: lang, project: projectName, topK: 5 })
+      .then((result) => {
+        const sources = new Set(result.evidence.map((e) => e.type));
+        const summary = {
+          facts: result.evidence.length,
+          sourcesCount: sources.size,
+          // research engine 的 evidence 型別（memory/style-kb/external）皆非官方文檔來源
+          officialSources: 0,
+        };
+        const stage1 = result.evidence.length > 0 ? "COMPLETE" : "PARTIAL";
+        runner.reportResearch(taskId, summary, stage1);
+      })
+      .catch(() => runner.reportResearch(taskId, { facts: 0, sourcesCount: 0, officialSources: 0 }, "FAILED"));
+  };
   const evidenceModel = createEvidenceModel();
   evidenceModel.setResearchEngine(researchEngine);
   evidenceModel.setVerificationEngine(verificationEngine);
   const evidenceGate = createEvidenceGate();
   const artifactController = createArtifactController({ db });
 
+  // T011/T040 + T012 整合層：ARTIFACT_VALIDATION → 驗證並套用 patch → VERIFYING → 沙箱驗證。
+  artifactTrigger = (taskId: string, workspace?: string) => {
+      void (async () => {
+        try {
+          const row = db
+            .prepare(
+              "SELECT id, attempt, diff FROM patches WHERE task_id = ? AND status = 'proposed' ORDER BY created_at DESC LIMIT 1",
+            )
+            .get(taskId) as { id: string; attempt: number; diff: string } | undefined;
+          if (!row || !workspace) {
+            runner.reportArtifactValidation(taskId, false, "no proposed patch or workspace missing");
+            return;
+          }
+          const normalized = await artifactController.normalizeExistingFiles(row.diff, workspace);
+          const decision = artifactController.validate({ diff: normalized }, policies.defaultPolicy.artifact!);
+          if (decision.verdict !== "APPROVED") {
+            runner.reportArtifactValidation(
+              taskId,
+              false,
+              `artifact policy: ${decision.violations.map((v) => `${v.file}:${v.rule}`).join(", ")}`,
+            );
+            return;
+          }
+          await artifactController.apply(
+            { taskId, attempt: row.attempt, diff: normalized, workspaceDir: workspace },
+            policies.defaultPolicy.artifact!,
+          );
+          runner.reportArtifactValidation(taskId, true);
+        } catch (err) {
+          runner.reportArtifactValidation(taskId, false, (err as Error).message.split("\n")[0]);
+        }
+      })();
+  };
+  verifyingTrigger = (taskId: string, workspace?: string) => {
+      void (async () => {
+        try {
+          if (!workspace) {
+            runner.reportVerificationResult(taskId, false, "workspace missing for verification");
+            return;
+          }
+          const task = taskManager.getRow(taskId)!;
+          const ctx = {
+            taskId,
+            attempt: task.attempt,
+            workspaceDir: workspace,
+            repo: buildVerificationContext(workspace),
+            task: {
+              risk: (task.risk as "low" | "medium" | "high") ?? undefined,
+              sandboxMode: task.sandboxMode ?? undefined,
+            },
+          };
+          const { results } = await verificationEngine.verify(ctx, DEFAULT_VERIFIERS);
+          const allPass = results.length > 0 && results.every((r) => r.status === "PASS");
+          const output = results.map((r) => `${r.verifier}=${r.status}`).join("; ") + "\n" + results.map((r) => r.output ?? "").join("\n");
+          runner.reportVerificationResult(taskId, allPass, output);
+        } catch (err) {
+          runner.reportVerificationResult(taskId, false, (err as Error).message.split("\n")[0] ?? "");
+        }
+      })();
+  };
   const app = Fastify({ logger: false });
-
   // §45.3 + §45.6：CORS — Tauri 2 webview 在 macOS 上以 `tauri://localhost` 載入前端，
   // fetch `http://127.0.0.1:<port>/api/...` 會被 WebKit 的 NetworkLoadChecker 視為 cross-origin
   // 並回 `validateResponse error / isAccessControl=1`。Control Plane 只 bind 127.0.0.1（loopback）

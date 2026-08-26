@@ -5,6 +5,8 @@ export interface ResearchQuery {
   query: string;
   language?: string;
   errorType?: string;
+  /** 專案名稱（project_memory 檢索鍵）；未提供時從 taskId 前綴推導。 */
+  project?: string;
   topK?: number;
   maxAgeDays?: number;
 }

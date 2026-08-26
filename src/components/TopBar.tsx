@@ -16,7 +16,6 @@ interface Props {
 export default function TopBar({ selectedTask, sandboxStatus }: Props) {
   const [sandbox, setSandbox] = useState<Record<string, boolean>>({});
   const [workers, setWorkers] = useState<WorkerInfo[]>([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const fetchWorkers = useCallback(async () => {
     try {
@@ -42,25 +41,15 @@ export default function TopBar({ selectedTask, sandboxStatus }: Props) {
     fetchWorkers();
   }, [fetchSandbox, fetchWorkers]);
 
-  // 定期刷新（每 10 秒）
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setRefreshTrigger((t) => t + 1);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // 任務切換時也刷新
-  useEffect(() => {
-    setRefreshTrigger((t) => t + 1);
-  }, []);
-
   const backendStatus = sandboxStatus ?? sandbox;
 
   // §45.4：TopBar 顯示目前 task 的 sandbox mode badge
   const taskSandbox = selectedTask?.sandboxMode;
   // 第一個 enabled worker 為目前預設 worker（Phase 1–5 只有 pi-local）
   const activeWorker = workers.find((w) => w.enabled) ?? workers[0];
+
+  const availableBackends = Object.entries(backendStatus).filter(([, ok]) => ok).map(([name]) => name);
+  const unavailableBackends = Object.entries(backendStatus).filter(([, ok]) => !ok).map(([name]) => name);
 
   return (
     <header className="topbar">
@@ -70,17 +59,20 @@ export default function TopBar({ selectedTask, sandboxStatus }: Props) {
       <span className="topbar-meta">model: {activeWorker?.model ?? "—"}</span>
       {taskSandbox && (
         <span className={STATUS_COLOR[taskSandbox] ?? "badge badge-dim"}>
-          sandbox: {taskSandbox}
+          sandbox (task): {taskSandbox}
         </span>
       )}
-      {!taskSandbox &&
-        Object.entries(backendStatus)
-          .filter(([, ok]) => ok)
-          .map(([name]) => (
-            <span key={name} className={STATUS_COLOR[name] ?? "badge badge-dim"}>
-              sandbox: {name}
-            </span>
-          ))}
+      {!taskSandbox && availableBackends.length > 0 && (
+        <>
+          <span className="badge badge-ok">available: {availableBackends.join(", ")}</span>
+          {unavailableBackends.length > 0 && (
+            <span className="badge badge-dim">unavailable: {unavailableBackends.join(", ")}</span>
+          )}
+        </>
+      )}
+      {!taskSandbox && availableBackends.length === 0 && (
+        <span className="badge badge-warn">no sandbox backends available</span>
+      )}
     </header>
   );
 }

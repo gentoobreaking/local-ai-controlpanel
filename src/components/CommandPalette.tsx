@@ -22,6 +22,7 @@ export default function CommandPalette({ tasks, onCommand, onClose }: Props) {
 
   const entries = useMemo<Entry[]>(() => {
     const base: Entry[] = [
+      { id: "help", label: "help", hint: "顯示所有快捷鍵與指令", command: { kind: "help" } },
       { id: "sandbox-check", label: "sandbox check", hint: "檢查 sandbox 後端狀態", command: { kind: "sandbox-check" } },
     ];
     for (const t of tasks) {

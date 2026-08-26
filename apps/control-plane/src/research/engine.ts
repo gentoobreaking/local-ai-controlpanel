@@ -197,17 +197,17 @@ export class ResearchEngine {
   }
 
   async research(query: ResearchQuery): Promise<ResearchResult> {
-    const { taskId, query: queryText, language, errorType, topK = DEFAULT_TOP_K, maxAgeDays = DEFAULT_MAX_AGE_DAYS } = query;
+    const { taskId, query: queryText, language, errorType, project, topK = DEFAULT_TOP_K, maxAgeDays = DEFAULT_MAX_AGE_DAYS } = query;
     const expandedQueries = queryExpansion(queryText);
 
     const allEvidence: EvidenceSource[] = [];
 
     if (this.memoryRetriever && taskId) {
-      const project = this.extractProjectFromTaskId(taskId);
-      if (project) {
+      const resolvedProject = project ?? this.extractProjectFromTaskId(taskId);
+      if (resolvedProject) {
         for (const q of expandedQueries.slice(0, 3)) {
           const memories = this.memoryRetriever.retrieveMemory({
-            project,
+            project: resolvedProject,
             query: q,
             topK: Math.max(1, Math.floor(topK / 2)),
             threshold: CONFIDENCE_THRESHOLD,

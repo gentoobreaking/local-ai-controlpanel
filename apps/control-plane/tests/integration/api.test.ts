@@ -67,7 +67,25 @@ test("GET /api/v1/tasks 列表與 GET /:id 詳細", async () => {
   assert.equal(tasks.length, 2);
   assert.equal(tasks[0]!.id, "TASK-002");
   assert.equal(tasks[0]!.sandboxMode, "seatbelt");
-  assert.equal(tasks[0]!.status, "RESEARCHING");
+  // T040/T012 整合層接入後 pipeline 非同步推進，狀態不再停滯於 RESEARCHING：
+  // 斷言落在合法的 pipeline 狀態集合即可（API 形狀測試，非時序測試）。
+  assert.ok(
+    [
+      "ANALYZING",
+      "POLICY_CHECK",
+      "RESEARCH_REQUIRED",
+      "RESEARCHING",
+      "EVIDENCE_VALIDATION",
+      "PLANNING",
+      "WORKER_SELECTION",
+      "IMPLEMENTING",
+      "ARTIFACT_VALIDATION",
+      "VERIFYING",
+      "REFLECTION",
+      "ASK_USER",
+    ].includes(tasks[0]!.status),
+    `unexpected status: ${tasks[0]!.status}`,
+  );
 
   const detail = await app.inject({ method: "GET", url: "/api/v1/tasks/TASK-001" });
   const d = detail.json();
@@ -195,5 +213,22 @@ test("SSE：/api/v1/tasks/:id/events 串流 stage 事件（fetch streaming）", 
   assert.ok(events.length >= 1, "expected >=1 SSE event");
   const first = events[0] as { type: string; stage?: string };
   assert.equal(first.type, "stage");
-  assert.ok(["ANALYZING", "POLICY_CHECK", "RESEARCH_REQUIRED", "RESEARCHING"].includes(first.stage!));
+  // pipeline 非同步推進 → 重連快照可能是任一階段；斷言落在合法集合即可。
+  assert.ok(
+    [
+      "ANALYZING",
+      "POLICY_CHECK",
+      "RESEARCH_REQUIRED",
+      "RESEARCHING",
+      "EVIDENCE_VALIDATION",
+      "PLANNING",
+      "WORKER_SELECTION",
+      "IMPLEMENTING",
+      "ARTIFACT_VALIDATION",
+      "VERIFYING",
+      "REFLECTION",
+      "ASK_USER",
+    ].includes(first.stage!),
+    `unexpected first stage: ${first.stage}`,
+  );
 });

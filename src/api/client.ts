@@ -81,16 +81,16 @@ export async function getTask(id: string): Promise<TaskDetail> {
 export async function createTask(
   userRequest: string,
   sandboxMode?: string,
+  workspace?: string,
 ): Promise<TaskDetail> {
   const res = await f(`${cpBaseUrl}/api/v1/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userRequest, sandboxMode }),
+    body: JSON.stringify({ userRequest, sandboxMode, workspace }),
   });
   if (!res.ok) throw new Error(`createTask ${res.status}`);
   return res.json();
 }
-
 export async function cancelTask(id: string): Promise<void> {
   const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/cancel`, {
     method: "POST",
@@ -134,17 +134,19 @@ export async function listWorkers(): Promise<WorkerInfo[]> {
 /** POST /api/v1/tasks/:id/verify（§45.5）— 立即驗證（可選 sandbox mode） */
 export async function verifyTask(
   id: string,
-  opts: { sandboxMode?: string } = {},
+  opts: { sandboxMode?: string; workspace?: string } = {},
 ): Promise<VerifyResult> {
   const res = await f(`${cpBaseUrl}/api/v1/tasks/${id}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
+    body: JSON.stringify({
+      ...(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
+      ...(opts.workspace ? { workspace: opts.workspace } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`verifyTask ${res.status}`);
   return res.json();
 }
-
 export interface StrategyResult {
   strategy: string;
   allowCloud: boolean;

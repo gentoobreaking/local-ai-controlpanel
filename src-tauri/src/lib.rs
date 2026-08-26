@@ -1,13 +1,12 @@
 //! 薄 Rust commands（spec §45.2/§45.3）：
 //! 只提供 clipboard / window / open-external-link + Control Plane 自動啟動/附著（§45.6 UI-6），
 //! 不碰 filesystem / shell / secrets —— 那些一律在 Control Plane 層。
-
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Duration;
 
-use tauri::{Manager, Url};
+use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 
 /// Control Plane 偵測/附著埠（設定化：ACP_CP_PORT，缺省 3001）。
@@ -103,26 +102,31 @@ fn spawn_control_plane(app: &tauri::AppHandle) -> Option<Child> {
         }
     }
 }
-
 /// 開啟外部連結（例如 evidence 的 source URI）於系統瀏覽器。
 /// 僅允許 http/https scheme；由 capabilities `opener:allow-open-url` 管制。
 #[tauri::command]
 fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
-    match parsed.scheme() {
-        "https" | "http" => app
-            .opener()
-            .open_url(url, None::<&str>)
-            .map_err(|e| e.to_string()),
-        _ => Err(format!("scheme not allowed: {}", parsed.scheme())),
-    }
+  if !url.starts_with("http://") && !url.starts_with("https://") {
+    return Err("只允許 http/https".into());
+  }
+  app.opener().open_url(url, None::<String>).map_err(|e| e.to_string())
 }
 
+/// 設定視窗大小（供前端 zoom 呼叫）。
+#[tauri::command]
+fn set_window_size(app: tauri::AppHandle, width: f64, height: f64) -> Result<(), String> {
+  if let Some(window) = app.get_webview_window("main") {
+    window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
+      .map_err(|e| e.to_string())
+  } else {
+    Err("找不到主視窗".into())
+  }
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![open_external])
+        .invoke_handler(tauri::generate_handler![open_external, set_window_size])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title("Agent Control Plane");

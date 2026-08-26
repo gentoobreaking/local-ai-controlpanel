@@ -36,20 +36,19 @@ function renderEvent(event: StageEvent): { line: string; cls: string; output?: s
 export default function TaskStream({ selectedId, events, connected, running }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const [reconnecting, setReconnecting] = useState(false);
-  const [lastConnected, setLastConnected] = useState(connected);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
   useEffect(() => {
-    if (connected && !lastConnected) {
+    if (connected) {
       setReconnecting(false);
-    } else if (!connected && lastConnected) {
+    } else if (selectedId) {
+      // 只有選了 task 且未連線才顯示 reconnecting
       setReconnecting(true);
     }
-    setLastConnected(connected);
-  }, [connected, lastConnected]);
+  }, [connected, selectedId]);
 
   return (
     <main className="stream">
@@ -62,6 +61,12 @@ export default function TaskStream({ selectedId, events, connected, running }: P
 
       <div className="stream-body">
         {!selectedId && <div className="stream-empty">select a task from the left</div>}
+        {selectedId && events.length === 0 && !connected && (
+          <div className="stream-empty">connecting to event stream…</div>
+        )}
+        {selectedId && events.length === 0 && connected && (
+          <div className="stream-empty">waiting for events…</div>
+        )}
         {events.map((e, i) => {
           const { line, cls, output } = renderEvent(e);
           return (

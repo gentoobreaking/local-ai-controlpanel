@@ -130,19 +130,21 @@ export class WorkerRouter {
 /**
  * 建立預設 registry：Phase 1–5 只註冊 pi-local（§17）。
  * qwen2.5-coder:7b、tier: local、enabled（對應 policies/default.yaml execution.local）。
+ * model 可由 LLAMA_MODEL 環境變數覆寫（預設 qwen2.5-coder:7b）。
  */
 export function createDefaultWorkerRegistry(
-  opts: { piWorker?: PiWorker } = {},
+  opts: { piWorker?: PiWorker; model?: string } = {},
 ): WorkerRegistry {
   const registry = new WorkerRegistry();
   // pi-local descriptor（v0.4 schema 完整欄位）
   // PiWorker 為 lazy：initialize(context) 時才探測 llama.cpp（baseUrl/model 由 policy/config 指定）
+  const model = opts.model ?? process.env.LLAMA_MODEL ?? "qwen2.5-coder:7b";
   registry.register(
     {
       id: "pi-local",
       runtime: "pi",
       capabilities: ["coding", "testing"],
-      models: ["qwen2.5-coder:7b"],
+      models: [model],
       locality: "local",
       costClass: "free",
       supportsACP: true,

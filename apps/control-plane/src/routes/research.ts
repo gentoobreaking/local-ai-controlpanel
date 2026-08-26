@@ -9,6 +9,7 @@ const ResearchQuerySchema = z.object({
   query: z.string().min(1),
   language: z.string().optional(),
   errorType: z.string().optional(),
+  project: z.string().optional(),
   topK: z.number().int().positive().max(20).optional(),
   maxAgeDays: z.number().int().positive().max(365).optional(),
 });

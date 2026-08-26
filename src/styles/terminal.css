@@ -451,6 +451,24 @@ body {
   opacity: 0.9;
 }
 
+.btn-small {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+.api-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--danger-bg, #fee);
+  border-bottom: 1px solid var(--danger, #f88);
+  color: var(--danger, #c00);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
 /* ── InputBar History Dropdown ────────────────────────── */
 
 .inputbar-wrapper {
@@ -546,6 +564,16 @@ body {
   font-size: 12px;
   min-width: 50px;
   text-align: center;
+}
+
+.zoom-label {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.zoom-sep {
+  color: var(--border);
+  margin: 0 4px;
 }
 
 /* ── Reconnection Status ───────────────────────────────── */

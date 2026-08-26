@@ -324,14 +324,18 @@ export interface PatchRow {
 
 /** 從 git diff 解析被觸及的檔案清單（git diff --name-only 的輕量替代） */
 export function diffFiles(diff: string): string[] {
-  const files: string[] = [];
+  const files = new Set<string>();
   for (const line of diff.split("\n")) {
     if (line.startsWith("diff --git ")) {
       const m = / b\/(.+)$/.exec(line);
-      if (m?.[1]) files.push(m[1].trim());
+      if (m?.[1]) files.add(m[1].trim());
+    } else if (line.startsWith("+++ b/")) {
+      // T023 實測：模型常輸出純 ---/+++ 格式（無 diff --git 標頭）→ 也解析 +++ 行
+      const p = line.slice(6).trim();
+      if (p && p !== "/dev/null") files.add(p);
     }
   }
-  return files;
+  return [...files];
 }
 
 export interface ArtifactControllerDeps {
