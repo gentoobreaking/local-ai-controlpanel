@@ -87,10 +87,12 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const workerRegistry = createDefaultWorkerRegistry({
     piWorker: config.execution.agenticSearch
       ? (new PiAgentWorker({
-          webSearch: (query, language) =>
-            (webRetrieveFn?.(query, language) ?? Promise.resolve([])) as Promise<
-              Array<{ title: string; snippet: string; confidence: number; metadata?: Record<string, unknown> }>
-            >,
+          webSearch: config.execution.webResearch
+            ? (query, language) =>
+                (webRetrieveFn?.(query, language) ?? Promise.resolve([])) as Promise<
+                  Array<{ title: string; snippet: string; confidence: number; metadata?: Record<string, unknown> }>
+                >
+            : undefined,
           onEvent: (taskId, event) => bus.emit(taskId, event as never),
           onPersistEvidence: (tid, facts) => taskManager.recordEvidence(tid, facts),
           maxRounds: config.execution.maxSearchRounds,
@@ -149,7 +151,9 @@ export async function buildApp(opts: { config?: Partial<AppConfig> } = {}) {
   const researchEngine = createResearchEngine({
     memoryRetriever,
     styleKb,
-    webSearch: (query, language) => webRetriever.retrieve(query, language),
+    ...(config.execution.webResearch
+      ? { webSearch: (query: string, language?: string) => webRetriever.retrieve(query, language) }
+      : {}),
   });
   // 綁定：研究完成 → reportResearch 推進 pipeline（COMPLETE/PARTIAL/FAILED 皆回報）。
   researchTrigger = (taskId, query, workspace) => {

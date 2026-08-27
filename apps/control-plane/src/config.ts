@@ -37,6 +37,8 @@ export interface ExecutionConfig {
   allowCloud: boolean;
   /** Agentic 搜尋迴圈：IMPLEMENTING 前讓模型自評缺口並迭代查詢（§16 延伸） */
   agenticSearch: boolean;
+  /** 網路檢索總開關（Benchmark Baseline 對照用；關閉 = 純本地證據） */
+  webResearch: boolean;
   /** 搜尋迴圈硬上限（防無限燒 token） */
   maxSearchRounds: number;
   maxDailyCostUsd?: number;
@@ -96,6 +98,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       phase: Number(env.CP_PHASE ?? 1),
       allowCloud: env.CP_ALLOW_CLOUD === "1" || env.CP_ALLOW_CLOUD === "true",
       agenticSearch: env.CP_AGENTIC_SEARCH !== "0" && env.CP_AGENTIC_SEARCH !== "false",
+      webResearch: env.CP_WEB_RESEARCH !== "0" && env.CP_WEB_RESEARCH !== "false",
       maxSearchRounds: Math.max(1, Number(env.CP_MAX_SEARCH_ROUNDS ?? 10)),
       maxDailyCostUsd: env.CP_MAX_DAILY_COST_USD ? Number(env.CP_MAX_DAILY_COST_USD) : undefined,
       maxTokensPerTask: env.CP_MAX_TOKENS_PER_TASK ? Number(env.CP_MAX_TOKENS_PER_TASK) : undefined,
