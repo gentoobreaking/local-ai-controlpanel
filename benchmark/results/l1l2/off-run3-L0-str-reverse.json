@@ -1,0 +1,25 @@
+{
+  "taskId": "TASK-006",
+  "fixtureId": "L0-str-reverse",
+  "level": "L0",
+  "mode": "off",
+  "run": 3,
+  "status": "COMPLETE",
+  "success": true,
+  "attempts": 1,
+  "durationSec": 21,
+  "verifications": [
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "PASS"
+    },
+    {
+      "verifier": "lint",
+      "status": "PASS"
+    }
+  ]
+}

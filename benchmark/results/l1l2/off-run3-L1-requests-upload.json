@@ -1,0 +1,49 @@
+{
+  "taskId": "TASK-003",
+  "fixtureId": "L1-requests-upload",
+  "level": "L1",
+  "mode": "off",
+  "run": 3,
+  "status": "STOP",
+  "success": false,
+  "attempts": 4,
+  "durationSec": 389,
+  "verifications": [
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    }
+  ]
+}

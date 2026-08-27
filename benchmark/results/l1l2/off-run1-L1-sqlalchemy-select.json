@@ -1,0 +1,61 @@
+{
+  "taskId": "TASK-004",
+  "fixtureId": "L1-sqlalchemy-select",
+  "level": "L1",
+  "mode": "off",
+  "run": 1,
+  "status": "STOP",
+  "success": false,
+  "attempts": 4,
+  "durationSec": 216,
+  "verifications": [
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    }
+  ]
+}

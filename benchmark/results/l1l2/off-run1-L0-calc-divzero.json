@@ -1,0 +1,25 @@
+{
+  "taskId": "TASK-001",
+  "fixtureId": "L0-calc-divzero",
+  "level": "L0",
+  "mode": "off",
+  "run": 1,
+  "status": "STOP",
+  "success": false,
+  "attempts": 4,
+  "durationSec": 160,
+  "verifications": [
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "PASS"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    }
+  ]
+}

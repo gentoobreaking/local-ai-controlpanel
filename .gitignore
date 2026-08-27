@@ -34,3 +34,5 @@ apps/control-plane/dist-bundle/
 
 # 基準測試 + E2E 結果（T023+），執行狀態資料不入庫
 results-keep/
+
+tmp/

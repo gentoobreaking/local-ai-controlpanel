@@ -1,0 +1,37 @@
+{
+  "taskId": "TASK-007",
+  "fixtureId": "L2-pydantic-v2-migration",
+  "level": "L2",
+  "mode": "off",
+  "run": 1,
+  "status": "STOP",
+  "success": false,
+  "attempts": 4,
+  "durationSec": 211,
+  "verifications": [
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "git_diff",
+      "status": "PASS"
+    },
+    {
+      "verifier": "unit_test",
+      "status": "FAIL"
+    },
+    {
+      "verifier": "lint",
+      "status": "FAIL"
+    }
+  ]
+}
