@@ -1,6 +1,7 @@
-"""String helpers."""
+"""String utility functions."""
 
-
-def reverse_words(sentence: str) -> str:
-    """Reverse word order in a sentence."""
-    return sentence
+def reverse_words(text: str) -> str:
+    """Reverse the order of words in the given text."""
+    words = text.split()
+    reversed_words = words[::-1]
+    return ' '.join(reversed_words)

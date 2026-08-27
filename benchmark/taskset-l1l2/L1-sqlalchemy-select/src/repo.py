@@ -1,26 +1,5 @@
-"""User repository backed by SQLAlchemy."""
-from sqlalchemy import create_engine, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-
-class Base(DeclarativeBase):
-    pass
-
-
-class User(Base):
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50))
-
-
-engine = create_engine("sqlite:///:memory:")
-Session = sessionmaker(bind=engine)
-Base.metadata.create_all(engine)
-
-
-def find_by_name(name: str) -> list[User]:
-    """Return users whose name matches exactly.
-
-    TODO: implement using SQLAlchemy 2.0 style (select() + where).
-    """
-    raise NotImplementedError
+def find_by_name(session: Session, name: str) -> MyModel:
+    return session.execute(select(MyModel).where(MyModel.name == name)).scalar_one_or_none()

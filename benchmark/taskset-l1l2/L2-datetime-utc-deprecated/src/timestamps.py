@@ -1,12 +1,11 @@
-"""Timestamp helpers — uses deprecated APIs on Python 3.12+. Must be modernized."""
-from datetime import datetime, timezone
+import datetime
+import pytz
 
 
-def now_utc_naive() -> datetime:
-    """Return current UTC time as a NAIVE datetime (deprecated pattern)."""
-    return datetime.utcnow()
+def now_utc_naive():
+    """Return the current UTC time as a naive datetime object."""
+    return datetime.datetime.now(pytz.utc)
 
-
-def ts_from_epoch(secs: float) -> datetime:
-    """Convert epoch seconds to a NAIVE UTC datetime (deprecated pattern)."""
-    return datetime.utcfromtimestamp(secs)
+def ts_from_epoch(epoch):
+    """Return the datetime object from the given epoch timestamp."""
+    return datetime.datetime.fromtimestamp(epoch, pytz.utc)
